@@ -235,6 +235,7 @@ export default function App() {
   } = useRegisterSW();
   const thread = data.threads.find((t) => t.id === selected);
   const active = data.threads.find((t) => t.status === "calling");
+  const profileInitial = (data.name.trim()[0] || session?.user.email?.trim()[0] || "").toLocaleUpperCase();
   const notify = (text: string) => setToast(text);
   const patchThread = (id: string, fn: (thread: Thread) => Thread) =>
     setData((d) => ({
@@ -805,7 +806,7 @@ export default function App() {
             onClick={() => setPage("profile")}
             aria-label="Open profile"
           >
-            {data.name[0]?.toUpperCase() || "A"}
+            {profileInitial || <UserRound size={18} strokeWidth={1.7} aria-hidden="true" />}
           </button>
         </div>
       </aside>
@@ -1726,7 +1727,7 @@ export default function App() {
                 <section>
                   <div className="profile-card">
                     <div className="profile-avatar">
-                      {data.name[0]?.toUpperCase() || "A"}
+                      {profileInitial || <UserRound size={28} strokeWidth={1.6} aria-hidden="true" />}
                     </div>
                     <h2>{data.name || "Your profile"}</h2>
                     <p>
