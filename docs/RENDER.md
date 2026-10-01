@@ -1,22 +1,19 @@
 # Render deployment
 
-Connect `gitdevin99/call4me` as a Node Web Service.
+Connect `gitdevin99/call4me`, branch `main`, as a paid Node Web Service.
 
-- Branch: `main`
-- Root directory: leave empty
-- Build command: `npm ci --include=dev && npm run build`
-- Start command: `npm start`
-- Health check: `/api/health`
-- Instance: a paid always-on instance
-- Environment: `NODE_ENV=production`, `HOST=0.0.0.0`
-- Let Render supply `PORT`.
+- Root directory: empty
+- Build: `npm ci --include=dev && npm run build`
+- Start: `npm start`
+- Health: `/api/health`
+- `HOST=0.0.0.0`, `NODE_ENV=production`; Render supplies `PORT`.
 
-Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` before building. These are public browser configuration; never put service-role credentials in a VITE variable.
+Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` before building. Use Render environment variables for `DATABASE_URL`, `OPENAI_API_KEY`, `GOOGLE_PLACES_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `WHOP_API_KEY`, `WHOP_COMPANY_ID`, `WHOP_WEBHOOK_SECRET`, and `PUBLIC_ORIGIN=https://canyoucall.app`. Set `OPENAI_REALTIME_MODEL=gpt-realtime` and `TELEPHONY_PROVIDER=twilio`.
 
-Copy the necessary server secrets from the local ignored `.env` into Render environment settings: `OPENAI_API_KEY`, `GOOGLE_PLACES_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, and `TELEPHONY_PROVIDER=twilio`. Keep all credentials out of Git. Whop integration is not implemented yet; storing its key does not enable payments.
+Set `TWILIO_VOICE_URL=https://canyoucall.app/api/voice/start` and `TWILIO_STATUS_CALLBACK_URL=https://canyoucall.app/api/voice/status`. The runtime selects from owned numbers dynamically; it does not rely on a fixed `TWILIO_FROM_NUMBER`.
 
-After deploying, add `canyoucall.app` as a Render custom domain and use the DNS records Render supplies in Cloudflare. Update Supabase Site URL and redirect allowlist to the final HTTPS origin. Rebuild after changing VITE variables.
+Apply both Supabase schemas and grant the restricted runtime database role access to private `callapp` tables with corresponding RLS policies. The bundled public Supabase CA verifies TLS. Never grant browser roles access to financial tables.
 
-## Current release boundary
+Add the root and www custom domains in Render; configure DNS using Render's supplied values. Set the Supabase Auth Site URL and redirects to the production origin and configure SMTP. Rebuild when changing VITE variables.
 
-This publishes the PWA and authenticated assistant, lookup, and transcription endpoints. Phone calls and wallet reloads are still previews. The call endpoint fails closed, and `/api/health` reports `calling: false` and `payments: false`. Real voice streaming, durable billing and Whop payment webhooks must be implemented and verified before accepting customer payments.
+Activate using `CALLS_ENABLED=true` and `PAYMENTS_ENABLED=true`. Validate signed Whop delivery, authenticated wallet reads, destination quotes, a real paid reload, and a user-authorized test call. Activation flags alone do not prove these tests passed. Existing installed PWAs should accept the Update app prompt after a release.
