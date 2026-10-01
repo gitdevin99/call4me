@@ -79,7 +79,7 @@ export async function reconcileCall(id,sid,fetchCall=()=>twilioClient().calls(si
   const duration=Math.max(0,Number(actual.duration)||0), cost=billedCents(duration,row.rate,row.reserved);
   await walletLock(c,row.user_id);
   await c.query('update callapp.wallets set reserved=reserved-$2,balance=balance-$3 where user_id=$1',[row.user_id,row.reserved,cost]);
-  await c.query('update callapp.calls set sid=$2,status=$3,duration=$4,cost=$5,ended_at=now() where id=$1',[id,sid,actual.status,duration,cost]);
+  await c.query("update callapp.calls set sid=$2,status=$3,duration=$4,cost=$5,ended_at=now(),summary=coalesce(summary,'The call ended without a confirmed result. Review the transcript.'),plan=case when plan ? '_outcome' then plan else plan || '{\"_outcome\":{\"status\":\"unconfirmed\",\"question\":\"\"}}'::jsonb end where id=$1",[id,sid,actual.status,duration,cost]);
   await c.query('insert into callapp.ledger(user_id,reference,title,cents,type) values($1,$2,$3,$4,$5) on conflict(reference) do nothing',[row.user_id,id,row.plan.business,-cost,'call']);
  });
 }

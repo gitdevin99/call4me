@@ -3,7 +3,7 @@ import twilio from 'twilio';
 import {selectCaller,phoneCountry} from '../server/numbers.mjs';
 import {paymentCredit} from '../server/billing.mjs';
 import {billedCents,directPhone} from '../server/calls.mjs';
-import {realtimeSession,signedStream} from '../server/voice.mjs';
+import {realtimeSession,signedStream,callOutcome} from '../server/voice.mjs';
 import {createTwilio} from '../server/twilio.mjs';
 test('caller selection prefers destination country and rejects unowned caller IDs',()=>{
  const numbers=[{phone:'+12166168630',country:'US'},{phone:'+442079460123',country:'GB'}];
@@ -42,6 +42,13 @@ test('Twilio media handshake validates the signed WebSocket URL',()=>{
 });
 test('voice session uses telephony audio and explicit AI disclosure',()=>{
  const s=realtimeSession({request:'Ask opening hours'}).session;assert.equal(s.audio.input.format.type,'audio/pcmu');assert.equal(s.audio.output.format.type,'audio/pcmu');assert.match(s.instructions,/Introduce yourself as an AI/);assert.match(s.instructions,/Do not invent/);
+ assert.match(s.instructions,/do not propose an arbitrary exact time/);
+ assert.deepEqual(s.tools[0].parameters.properties.outcome.enum,['confirmed','needs_input','unconfirmed']);
+});
+test('a missing customer detail becomes one question, while empty or invalid outcomes stay unconfirmed',()=>{
+ assert.deepEqual(callOutcome({summary:'They need a booking name.',outcome:'needs_input',question:'What name should I use?'}),{summary:'They need a booking name.',outcome:'needs_input',question:'What name should I use?'});
+ assert.equal(callOutcome({summary:'Maybe booked.',outcome:'needs_input',question:''}).outcome,'unconfirmed');
+ assert.equal(callOutcome({summary:'Maybe booked.',outcome:'unknown',question:''}).outcome,'unconfirmed');
 });
 
 test('webhook rejects tampered and stale payloads and acknowledges unrelated valid events',async()=>{

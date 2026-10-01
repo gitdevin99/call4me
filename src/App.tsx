@@ -389,7 +389,7 @@ export default function App() {
       setReserved(result.reserved);
       setData(d=>({...d,balance:result.balance,transactions:result.transactions,threads:d.threads.map(t=>{
         const c=result.calls.find((c:{thread_id:string})=>c.thread_id===t.id);if(!c)return t;
-        return {...t,callId:c.id,caller:c.caller,callStatus:c.status,status:c.ended_at?(c.status==='completed'?'completed':'cancelled'):'calling',started:Date.parse(c.created_at),cost:c.cost,duration:c.duration,transcript:c.transcript.map((x:{role:string;text:string})=>x.role+': '+x.text).join('\n')};
+        return {...t,callId:c.id,caller:c.caller,callStatus:c.status,callOutcome:c.plan?._outcome?.status,followUpQuestion:c.plan?._outcome?.question||undefined,status:c.ended_at?(c.status==='completed'?'completed':'cancelled'):'calling',started:Date.parse(c.created_at),cost:c.cost,duration:c.duration,transcript:c.transcript.map((x:{role:string;text:string})=>x.role+': '+x.text).join('\n')};
       })}));
     }catch(e){if(!cancelled)notify(e instanceof Error?e.message:'Could not load wallet.');}};
     void refresh(); const timer=setInterval(refresh,15000);
@@ -402,7 +402,11 @@ export default function App() {
       const {call}=await liveApi('/calls/'+active.callId);
       if(stopped)return;
       const ended=Boolean(call.ended_at);
-      patchThread(active.id,t=>({...t,callStatus:call.status,status:ended?(call.status==='completed'?'completed':'cancelled'):'calling',cost:call.cost,duration:call.duration,transcript:call.transcript.map((x:{role:string;text:string})=>x.role+': '+x.text).join('\n'),messages:ended?[...t.messages,message('assistant',call.summary||`Call ended: ${call.status}. Review the transcript for the outcome.`)]:t.messages}));
+      patchThread(active.id,t=>{
+        const resultText=[call.summary||`Call ended: ${call.status}. Review the transcript for the outcome.`,call.plan?._outcome?.question].filter(Boolean).join('\n');
+        const resultId=`call-result:${call.id}`;
+        return {...t,callStatus:call.status,callOutcome:call.plan?._outcome?.status,followUpQuestion:call.plan?._outcome?.question||undefined,status:ended?(call.status==='completed'?'completed':'cancelled'):'calling',cost:call.cost,duration:call.duration,transcript:call.transcript.map((x:{role:string;text:string})=>x.role+': '+x.text).join('\n'),messages:ended&&!t.messages.some(m=>m.id===resultId)?[...t.messages,{...message('assistant',resultText),id:resultId}]:t.messages};
+      });
     }catch(e){notify(e instanceof Error?e.message:'Checking call status…');}};
     void poll();const timer=setInterval(poll,5000);return()=>{stopped=true;clearInterval(timer);};
   },[active?.callId,session?.user.id]);
@@ -585,8 +589,10 @@ export default function App() {
       notify("Please keep your message under 2,000 characters.");
       return;
     }
-    const id = resumeThreadId || selected || uid();
-    let current = resumeThreadId ? data.threads.find(t=>t.id===resumeThreadId) : thread;
+    const continuing = !resumeThreadId && thread?.status === 'completed' && thread.callOutcome === 'needs_input';
+    const requestText = continuing ? `${thread.plan.request} Call ${thread.plan.phone}. Customer clarification: ${text}` : text;
+    const id = continuing ? uid() : resumeThreadId || selected || uid();
+    let current = continuing ? undefined : resumeThreadId ? data.threads.find(t=>t.id===resumeThreadId) : thread;
     if (!current) {
       current = {
         id,
@@ -632,7 +638,7 @@ export default function App() {
           ? { ...blankIntent(), ...current.plan, kind: current.kind }
           : blankIntent());
       const decision = await api('/prepare',{
-        text,previous:{...blankIntent(),...previous},awaiting:current.discovery?.awaiting,
+        text:requestText,previous:{...blankIntent(),...previous},awaiting:current.discovery?.awaiting,
         today:new Date().toLocaleDateString('en-CA'),profileName:data.name,...contextFor(current),
       });
       const intent:Intent=decision.intent;
@@ -1478,10 +1484,8 @@ export default function App() {
                                 <Check size={19} />
                               </span>
                               <div>
-                                <h3>
-                                  Call finished
-                                </h3>
-                                <small>Review the transcript for the outcome</small>
+                                <h3>{thread.callOutcome === 'needs_input' ? 'One detail needed' : thread.callOutcome === 'unconfirmed' ? 'Call needs review' : 'Call finished'}</h3>
+                                <small>{thread.callOutcome === 'needs_input' ? 'Reply below to continue in a new call' : thread.callOutcome === 'unconfirmed' ? 'Nothing was marked confirmed' : 'Review the transcript for the outcome'}</small>
                               </div>
                             </div>
                             <div className="result-details">
@@ -1493,7 +1497,11 @@ export default function App() {
                               <div>
                                 <strong>{thread.plan.business}</strong>
                                 <h4>
-                                  {!thread.plan.date || !thread.plan.time
+                                  {thread.callOutcome === 'needs_input'
+                                    ? 'Waiting for your answer'
+                                    : thread.callOutcome === 'unconfirmed'
+                                    ? 'No confirmed result'
+                                    : !thread.plan.date || !thread.plan.time
                                     ? "Your answer is ready"
                                     : `${formatDate(thread.plan.date)} · ${formatTime(thread.plan.time)}`}
                                 </h4>
@@ -1505,6 +1513,7 @@ export default function App() {
                                     ? `Under ${thread.plan.name}`
                                     : ""}
                                 </p>
+                                {thread.followUpQuestion && <p>{thread.followUpQuestion}</p>}
                               </div>
                             </div>
 
