@@ -235,6 +235,11 @@ export function discoveryRouter(supabase) {
       const decision = assistantSchema.parse(
         JSON.parse(result.choices?.[0]?.message?.content),
       );
+      // A corrected destination invalidates every old result, regardless of the
+      // model's conversational action label. Never keep another city's cards.
+      if(parsed.data.phase==='message'&&decision.intent.business&&decision.intent.area&&decision.intent.area!==parsed.data.previous.area){
+        decision.action='search';decision.selectedIndex=null;decision.awaiting=null;
+      }
       if(decision.action==='search'&&!decision.intent.area&&!parsed.data.hasLocation){
         decision.action='ask';decision.awaiting='area';
         decision.reply=`Which city is ${decision.intent.business || 'the business'} in? You can type it or use your current location.`;
