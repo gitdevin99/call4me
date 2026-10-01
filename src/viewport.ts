@@ -1,4 +1,23 @@
-/** Fit the app to the visible screen, including mobile keyboard changes. */
+/** Keep the app on the layout viewport; only the keyboard should shorten it. */
+export function appViewportSize({
+  layoutHeight,
+  visualHeight,
+  visualTop,
+  focused,
+}: {
+  layoutHeight: number;
+  visualHeight?: number;
+  visualTop?: number;
+  focused: boolean;
+}) {
+  const keyboard = Boolean(focused && visualHeight && layoutHeight - visualHeight > 120);
+  return {
+    height: keyboard ? visualHeight! : layoutHeight,
+    top: keyboard ? (visualTop ?? 0) : 0,
+    keyboard,
+  };
+}
+
 export function installAppViewport() {
   const root = document.documentElement;
   const viewport = window.visualViewport;
@@ -7,11 +26,16 @@ export function installAppViewport() {
     frame = 0;
     // Do not turn intentional pinch zoom into a layout resize.
     if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
-    const height = viewport?.height ?? window.innerHeight;
-    root.style.setProperty('--app-height', `${height}px`);
-    root.style.setProperty('--app-top', `${viewport?.offsetTop ?? 0}px`);
     const focused = document.activeElement?.matches('input, textarea, [contenteditable="true"]');
-    root.dataset.keyboard = String(Boolean(focused && window.innerHeight - height > 120));
+    const size = appViewportSize({
+      layoutHeight: window.innerHeight,
+      visualHeight: viewport?.height,
+      visualTop: viewport?.offsetTop,
+      focused: Boolean(focused),
+    });
+    root.style.setProperty('--app-height', `${size.height}px`);
+    root.style.setProperty('--app-top', `${size.top}px`);
+    root.dataset.keyboard = String(size.keyboard);
   };
   const schedule = () => {
     if (!frame) frame = requestAnimationFrame(update);

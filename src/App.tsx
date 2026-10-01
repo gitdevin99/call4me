@@ -1320,13 +1320,14 @@ export default function App() {
                           )}
                         </div>
                       )}
-                      {thread.status === "ready" && (
+                      {(thread.status === "ready" ||
+                        (thread.status === "cancelled" && thread.callStatus === "failed")) && (
                         <div className="call-card ready-card">
                           <div className="card-eyebrow">
                             <span className="status-icon">
                               <Phone size={15} />
                             </span>{" "}
-                            READY TO CALL{" "}
+                            {thread.callStatus === "failed" ? "READY TO RETRY" : "READY TO CALL"}{" "}
 
                           </div>
                           <div className="venue-heading">
@@ -1413,7 +1414,7 @@ export default function App() {
                             onClick={startCall}
                             disabled={callBusy}
                           >
-                            <Phone size={17} /> {callBusy ? "Checking number…" : "Review & call"}{" "}
+                            <Phone size={17} /> {callBusy ? "Checking number…" : thread.callStatus === "failed" ? "Review & retry" : "Review & call"}{" "}
                             <ArrowUpRight size={17} />
                           </button>
                           <button className="edit-details" onClick={openPlan}>

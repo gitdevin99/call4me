@@ -28,7 +28,14 @@ export function createTwilio(config, request = fetch) {
         signal: AbortSignal.timeout(15000),
       },
     );
-    if (!response.ok) { const error=new Error(`Twilio request failed (${response.status}).`); error.status=response.status; throw error; }
+    if (!response.ok) {
+      let detail;
+      try { detail = await response.json(); } catch { /* Twilio may return a non-JSON error. */ }
+      const error = new Error(`Twilio request failed (${response.status}).`);
+      error.status = response.status;
+      error.code = Number.isInteger(Number(detail?.code)) ? Number(detail.code) : undefined;
+      throw error;
+    }
     return response.json();
   }
   return {

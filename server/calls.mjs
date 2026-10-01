@@ -39,6 +39,12 @@ export async function placeCall(user,{threadId,placeId,destinationPhone,plan,cal
  const row=await transaction(async c=>{
   const w=await walletLock(c,user);
   const existing=(await c.query('select * from callapp.calls where user_id=$1 and thread_id=$2',[user,threadId])).rows[0];
+  if(existing?.status==='failed'&&!existing.sid&&existing.ended_at&&Number(existing.cost)===0){
+   if(w.balance-w.reserved<limit)throw new Error('Reload your wallet to cover the spending limit.');
+   if((await c.query("select 1 from callapp.calls where user_id=$1 and ended_at is null",[user])).rowCount)throw new Error('Finish your current call first.');
+   await c.query('update callapp.wallets set reserved=reserved+$2 where user_id=$1',[user,limit]);
+   return (await c.query("update callapp.calls set place_id=$2,destination=$3,caller=$4,plan=$5,reserved=$6,rate=$7,status='dispatching',duration=null,cost=null,summary=null,ended_at=null,created_at=now() where id=$1 returning *",[existing.id,q.place.id,q.place.phone,q.caller.phone,{...plan,business:placeId?q.place.name:(plan.business||'Direct phone call'),direct:!placeId},limit,q.rate])).rows[0];
+  }
   if(existing)return {...existing,existing:true};
   if(w.balance-w.reserved<limit)throw new Error('Reload your wallet to cover the spending limit.');
   if((await c.query("select 1 from callapp.calls where user_id=$1 and ended_at is null",[user])).rowCount)throw new Error('Finish your current call first.');
@@ -52,8 +58,10 @@ export async function placeCall(user,{threadId,placeId,destinationPhone,plan,cal
   return {...row,sid:result.sid,status:result.status};
  }catch(e){
   if(e.status>=400&&e.status<500){
-   await transaction(async c=>{const r=(await c.query('select * from callapp.calls where id=$1 for update',[row.id])).rows[0];if(r.ended_at)return;await walletLock(c,user);await c.query('update callapp.wallets set reserved=reserved-$2 where user_id=$1',[user,row.reserved]);await c.query("update callapp.calls set status='failed',cost=0,duration=0,ended_at=now(),summary='The carrier rejected the call. No credit was charged.' where id=$1",[row.id]);});
-   throw new Error('The carrier rejected this call. Your credit has been released. Check the destination country permissions.');
+   const reason=e.code===21215?'Twilio has blocked calls to this destination under its dialing permissions.':`Twilio rejected the call${e.code?` (error ${e.code})`:''}.`;
+   const summary=`${reason} No credit was charged.`;
+   await transaction(async c=>{const r=(await c.query('select * from callapp.calls where id=$1 for update',[row.id])).rows[0];if(r.ended_at)return;await walletLock(c,user);await c.query('update callapp.wallets set reserved=reserved-$2 where user_id=$1',[user,row.reserved]);await c.query("update callapp.calls set status='failed',cost=0,duration=0,ended_at=now(),summary=$2 where id=$1",[row.id,summary]);});
+   throw new Error(`${reason} Your credit has been released.`);
   }
   // A network timeout may still have placed the call. Keep the hold for callback/reconciliation.
   await db().query("update callapp.calls set status='dispatch-unknown',summary=$2 where id=$1 and sid is null",[row.id,'The provider did not confirm dialing. Credit remains reserved until reconciliation.']);

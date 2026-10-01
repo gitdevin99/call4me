@@ -4,6 +4,7 @@ import {selectCaller,phoneCountry} from '../server/numbers.mjs';
 import {paymentCredit} from '../server/billing.mjs';
 import {billedCents,directPhone} from '../server/calls.mjs';
 import {realtimeSession,signedStream} from '../server/voice.mjs';
+import {createTwilio} from '../server/twilio.mjs';
 test('caller selection prefers destination country and rejects unowned caller IDs',()=>{
  const numbers=[{phone:'+12166168630',country:'US'},{phone:'+442079460123',country:'GB'}];
  assert.equal(selectCaller(numbers,'+442079460222').country,'GB');assert.equal(selectCaller(numbers,'+6638253000').country,'US');
@@ -24,6 +25,10 @@ test('direct calls require a valid international number',()=>{
  assert.equal(directPhone('+66812345678'),'+66812345678');
  assert.throws(()=>directPhone('2165551234'));
  assert.throws(()=>directPhone('+123'));
+});
+test('Twilio rejection retains its error code for a useful call result',async()=>{
+ const client=createTwilio({accountSid:'AC'+'1'.repeat(32),authToken:'test',from:'+12165551234',voiceUrl:'https://example.com/voice',statusCallbackUrl:'https://example.com/status'},async()=>({ok:false,status:400,json:async()=>({code:21215,message:'Geo permission denied'})}));
+ await assert.rejects(client.dial({to:'+66812345678',reservedCents:300,rateCentsPerMinute:60,commandId:'test-call'}),error=>error.status===400&&error.code===21215&&!error.message.includes('Geo permission denied'));
 });
 test('Twilio media handshake validates the signed WebSocket URL',()=>{
  const before={origin:process.env.PUBLIC_ORIGIN,token:process.env.TWILIO_AUTH_TOKEN};
