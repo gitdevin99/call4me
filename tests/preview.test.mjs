@@ -1,0 +1,9 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {seedData,settlePreviewCall,calendarFile} from '../src/model.ts';
+function active(){const data=seedData();data.threads[0].status='calling';data.threads[0].started=100000;return data;}
+test('completion charges exactly once, even if duplicate completion events arrive',()=>{const before=active();const after=settlePreviewCall(before,'olive',false,124000);assert.equal(after.balance,828);assert.equal(after.transactions.length,before.transactions.length+1);assert.equal(after.threads[0].cost,12);assert.equal(settlePreviewCall(after,'olive',false,125000),after);});
+test('cancelled calls bill elapsed seconds and preserve cancelled outcome',()=>{const result=settlePreviewCall(active(),'olive',true,105000);assert.equal(result.balance,837);assert.equal(result.threads[0].status,'cancelled');assert.equal(result.threads[0].duration,5);});
+test('background tab delays cannot inflate the 24 second preview charge',()=>{const result=settlePreviewCall(active(),'olive',false,900000);assert.equal(result.threads[0].duration,24);assert.equal(result.threads[0].cost,12);});
+test('wallet never goes negative and spending caps are respected',()=>{const low=active();low.balance=4;assert.equal(settlePreviewCall(low,'olive',false,124000).balance,0);const capped=active();capped.threads[0].plan.limit=3;assert.equal(settlePreviewCall(capped,'olive',false,124000).threads[0].cost,3);});
+test('calendar exports escape injected newlines and clearly label the preview',()=>{const thread=seedData().threads[0];thread.plan.business='Venue\nBEGIN:VEVENT';const ics=calendarFile(thread);assert.equal(ics.match(/\r\nBEGIN:VEVENT/g).length,1);assert.ok(ics.includes('Venue\\nBEGIN:VEVENT'));assert.ok(ics.includes('No real reservation was made'));});
