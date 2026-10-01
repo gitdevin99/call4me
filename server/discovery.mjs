@@ -242,6 +242,10 @@ export function discoveryRouter(supabase) {
       if(statedNumber)decision.intent.phone=statedNumber;
       else if(decision.intent.phone!==parsed.data.previous.phone)decision.intent.phone='';
       if(decision.intent.phone){decision.action='reply';decision.awaiting=null;decision.selectedIndex=null;}
+      else if(/(?:\d[ .()-]?){9,}\d/.test(parsed.data.text)){
+        decision.action='ask';decision.awaiting='business';decision.selectedIndex=null;
+        decision.reply='Please send the phone number with its country code, starting with +, so I call the right person.';
+      }
       // A corrected destination invalidates every old result, regardless of the
       // model's conversational action label. Never keep another city's cards.
       if(!decision.intent.phone&&parsed.data.phase==='message'&&decision.intent.business&&decision.intent.area&&decision.intent.area!==parsed.data.previous.area){
