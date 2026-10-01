@@ -32,8 +32,10 @@ export type Thread = {
   callId?: string;
   caller?: string;
   callStatus?: string;
-  callOutcome?: "confirmed" | "needs_input" | "unconfirmed";
+  callOutcome?: "confirmed" | "needs_input" | "unconfirmed" | "reviewing";
   followUpQuestion?: string;
+  nextStep?: string;
+  callSummary?: string;
   discovery?: import("./intent").Discovery;
 };
 export type Transaction = {

@@ -3,6 +3,7 @@ import {accountRouter} from './account.mjs';
 import {whopWebhook,paymentsReady,startPaymentReconciliation} from './billing.mjs';
 import {attachVoice,voiceStart,voiceStatus} from './voice.mjs';
 import {liveReady,startCallReconciliation} from './calls.mjs';
+import {startOutcomeReview} from './outcome.mjs';
 import { aiConfigured, aiConfig, chatOptions, transcribeAudio } from "./ai.mjs";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
@@ -136,6 +137,7 @@ const host = process.env.HOST || "127.0.0.1";
 const server=createServer(app);
 attachVoice(server);
 startCallReconciliation();
+startOutcomeReview();
 startPaymentReconciliation();
 server.listen(Number(process.env.PORT) || 3001, host, () =>
   console.log(
