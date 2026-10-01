@@ -1,3 +1,4 @@
+import {GoogleSignIn,googleSignInConfigured} from './GoogleSignIn';
 import {readPending,savePending,clearPending} from './pending';
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
@@ -1777,7 +1778,7 @@ export default function App() {
                       <small>
                         {session
                           ? "Sign out"
-                          : "One secure email link. No password."}
+                          : googleSignInConfigured ? "Continue with Google. No extra password." : "One secure email link. No password."}
                       </small>
                     </span>
                     <ChevronRight size={17} />
@@ -1948,13 +1949,13 @@ export default function App() {
       {modal === "auth" && (
         <ModalFrame
           title="Your assistant. Everywhere."
-          subtitle={readPending() ? "Your request is saved. Sign in and I’ll pick up where you left off." : "One email. No password. We’ll create your account if you’re new."}
+          subtitle={readPending() ? "Your request is saved. Sign in and I’ll pick up where you left off." : googleSignInConfigured ? "Continue with Google. We’ll create your account if you’re new." : "One email. No password. We’ll create your account if you’re new."}
           close={() => setModal(null)}
         >
           <div className="auth-avatar">
             <Avatar />
           </div>
-          <form onSubmit={auth} className="auth-form">
+          {googleSignInConfigured ? <GoogleSignIn/> : <form onSubmit={auth} className="auth-form">
             <label>
               Email address
               <input
@@ -1974,7 +1975,7 @@ export default function App() {
               )}{" "}
               {authBusy ? "Sending your link…" : "Email me a sign-in link"}
             </button>
-          </form>
+          </form>}
           {authMessage && (
             <p className="auth-message" role="status">
               {authMessage}
