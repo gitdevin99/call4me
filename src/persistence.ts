@@ -9,6 +9,7 @@ export function persistentPreview(data: AppData): AppData {
       if (
         !discovery ||
         discovery.mode === "demo" ||
+        discovery.mode === "direct" ||
         discovery.selected?.source === "demo"
       )
         return thread;

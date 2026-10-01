@@ -1,8 +1,9 @@
 import test from 'node:test';import assert from 'node:assert/strict';
+import twilio from 'twilio';
 import {selectCaller,phoneCountry} from '../server/numbers.mjs';
 import {paymentCredit} from '../server/billing.mjs';
-import {billedCents} from '../server/calls.mjs';
-import {realtimeSession} from '../server/voice.mjs';
+import {billedCents,directPhone} from '../server/calls.mjs';
+import {realtimeSession,signedStream} from '../server/voice.mjs';
 test('caller selection prefers destination country and rejects unowned caller IDs',()=>{
  const numbers=[{phone:'+12166168630',country:'US'},{phone:'+442079460123',country:'GB'}];
  assert.equal(selectCaller(numbers,'+442079460222').country,'GB');assert.equal(selectCaller(numbers,'+6638253000').country,'US');
@@ -17,6 +18,22 @@ test('payment credit verifies identity, currency and amount; refunds and dispute
 });
 test('per-second billing cannot exceed the reserved limit',()=>{
  assert.equal(billedCents(1,60,300),1);assert.equal(billedCents(0,60,300),0);assert.equal(billedCents(1000,60,300),300);assert.equal(billedCents(7,65,300),8);
+});
+test('direct calls require a valid international number',()=>{
+ assert.equal(directPhone('+12165551234'),'+12165551234');
+ assert.equal(directPhone('+66812345678'),'+66812345678');
+ assert.throws(()=>directPhone('2165551234'));
+ assert.throws(()=>directPhone('+123'));
+});
+test('Twilio media handshake validates the signed WebSocket URL',()=>{
+ const before={origin:process.env.PUBLIC_ORIGIN,token:process.env.TWILIO_AUTH_TOKEN};
+ process.env.PUBLIC_ORIGIN='https://example.com';process.env.TWILIO_AUTH_TOKEN='test-token';
+ try{
+  const url='wss://example.com/api/voice/stream';
+  const signature=twilio.getExpectedTwilioSignature('test-token',url,{});
+  assert.equal(signedStream({url:'/api/voice/stream',headers:{'x-twilio-signature':signature}}),true);
+  assert.equal(signedStream({url:'/api/voice/stream',headers:{'x-twilio-signature':'invalid'}}),false);
+ }finally{if(before.origin===undefined)delete process.env.PUBLIC_ORIGIN;else process.env.PUBLIC_ORIGIN=before.origin;if(before.token===undefined)delete process.env.TWILIO_AUTH_TOKEN;else process.env.TWILIO_AUTH_TOKEN=before.token;}
 });
 test('voice session uses telephony audio and explicit AI disclosure',()=>{
  const s=realtimeSession({request:'Ask opening hours'}).session;assert.equal(s.audio.input.format.type,'audio/pcmu');assert.equal(s.audio.output.format.type,'audio/pcmu');assert.match(s.instructions,/Introduce yourself as an AI/);assert.match(s.instructions,/Do not invent/);

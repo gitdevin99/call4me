@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {db,transaction,walletLock,dbConfigured} from './db.mjs';
 import {ownedNumbers,selectCaller,twilioClient,phoneCountry} from './numbers.mjs';
+import {parsePhoneNumberFromString} from 'libphonenumber-js';
 import {createTwilio} from './twilio.mjs';
 export const liveReady=()=>Boolean(dbConfigured()&&process.env.OPENAI_API_KEY&&process.env.TWILIO_ACCOUNT_SID&&process.env.TWILIO_AUTH_TOKEN&&process.env.PUBLIC_ORIGIN&&process.env.CALLS_ENABLED==='true');
 export const RATE=Number(process.env.CALL_RATE_CENTS_PER_MINUTE)||60;
@@ -13,8 +14,16 @@ export async function callPlace(id) {
  if(!phone||!phoneCountry(phone))throw new Error('This business has no supported phone number.');
  return {id:p.id,name:p.displayName.text,phone};
 }
-export async function quote(placeId,caller) {
- const place=await callPlace(placeId), numbers=await ownedNumbers();
+export function directPhone(value) {
+ if(typeof value!=='string'||!/^\+[1-9]\d{6,14}$/.test(value))throw new Error('Enter a phone number with country code, such as +12165551234.');
+ const parsed=parsePhoneNumberFromString(value);
+ if(!parsed?.isValid())throw new Error('That phone number is not valid. Check the country code and digits.');
+ return parsed.number;
+}
+export async function quote({placeId,destinationPhone,caller}) {
+ if(Boolean(placeId)===Boolean(destinationPhone))throw new Error('Choose one business or phone number to call.');
+ const place=placeId?await callPlace(placeId):{id:`direct:${directPhone(destinationPhone)}`,name:'Direct phone call',phone:directPhone(destinationPhone)};
+ const numbers=await ownedNumbers();
  const selected=selectCaller(numbers,place.phone,caller);
  const price=await twilioClient().pricing.v2.voice.numbers(place.phone).fetch();
  if(price.priceUnit!=='USD'||!price.outboundCallPrices?.length)throw new Error('Pricing is unavailable for this destination.');
@@ -23,9 +32,9 @@ export async function quote(placeId,caller) {
  const rate=Math.max(RATE,Math.ceil((carrier*100+25)*1.5));
  return {place,caller:selected,numbers,rate,maxSeconds:600};
 }
-export async function placeCall(user,{threadId,placeId,plan,caller,limit,quotedRate}) {
+export async function placeCall(user,{threadId,placeId,destinationPhone,plan,caller,limit,quotedRate}) {
  if(!liveReady())throw new Error('Live calling is awaiting its connection test. No call was placed.');
- const q=await quote(placeId,caller);
+ const q=await quote({placeId,destinationPhone,caller});
  if(q.rate!==quotedRate)throw new Error("The rate changed. Please review the call again.");
  const row=await transaction(async c=>{
   const w=await walletLock(c,user);
@@ -34,7 +43,7 @@ export async function placeCall(user,{threadId,placeId,plan,caller,limit,quotedR
   if(w.balance-w.reserved<limit)throw new Error('Reload your wallet to cover the spending limit.');
   if((await c.query("select 1 from callapp.calls where user_id=$1 and ended_at is null",[user])).rowCount)throw new Error('Finish your current call first.');
   const id=randomUUID();await c.query('update callapp.wallets set reserved=reserved+$2 where user_id=$1',[user,limit]);
-  return (await c.query('insert into callapp.calls(id,user_id,thread_id,place_id,destination,caller,plan,reserved,rate) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *',[id,user,threadId,placeId,q.place.phone,q.caller.phone,{...plan,business:q.place.name},limit,q.rate])).rows[0];
+  return (await c.query('insert into callapp.calls(id,user_id,thread_id,place_id,destination,caller,plan,reserved,rate) values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *',[id,user,threadId,q.place.id,q.place.phone,q.caller.phone,{...plan,business:placeId?q.place.name:(plan.business||'Direct phone call'),direct:!placeId},limit,q.rate])).rows[0];
  });
  if(row.existing)return row;
  try {

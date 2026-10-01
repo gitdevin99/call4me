@@ -213,7 +213,7 @@ export default function App() {
     calling: false,
     payments: false,
   });
-  const [quoteData, setQuoteData] = useState<{caller:{phone:string;country:string},numbers:{phone:string;country:string}[],rate:number} | null>(null);
+  const [quoteData, setQuoteData] = useState<{place:{phone:string;name:string},caller:{phone:string;country:string},numbers:{phone:string;country:string}[],rate:number} | null>(null);
   const [callBusy, setCallBusy] = useState(false);
   const [creditBusy, setCreditBusy] = useState(false);
   const [reserved, setReserved] = useState(0);
@@ -452,7 +452,7 @@ export default function App() {
     finally{setCreditBusy(false);}
   }
   function finishDiscovery(id: string, discovery: Discovery, assistantReply?: string) {
-    const awaiting = assistantReply ? discovery.awaiting : missingDetail(discovery.intent);
+    const awaiting = discovery.mode === 'direct' ? undefined : assistantReply ? discovery.awaiting : missingDetail(discovery.intent);
     const ready = !!discovery.selected && !awaiting;
     const reply = awaiting
       ? questions[awaiting].text
@@ -632,12 +632,15 @@ export default function App() {
           ? { ...blankIntent(), ...current.plan, kind: current.kind }
           : blankIntent());
       const decision = await api('/prepare',{
-        text,previous,awaiting:current.discovery?.awaiting,
+        text,previous:{...blankIntent(),...previous},awaiting:current.discovery?.awaiting,
         today:new Date().toLocaleDateString('en-CA'),profileName:data.name,...contextFor(current),
       });
       const intent:Intent=decision.intent;
       const chosen=current.discovery?.selected;
-      if(decision.action==='select' && decision.selectedIndex!==null){
+      if(intent.phone){
+        const direct:Place={id:`direct:${intent.phone}`,name:intent.business||'Phone call',address:'',phone:intent.phone,source:'direct'};
+        finishDiscovery(id,{intent,selected:direct,mode:'direct'},'Ready. Review the number and spending limit below before I call.');
+      }else if(decision.action==='select' && decision.selectedIndex!==null){
         const candidate=current.discovery?.candidates?.[decision.selectedIndex];
         if(!candidate)throw new Error('That result is no longer available. Tell me the business and city again.');
         const place=(await api('/places/'+encodeURIComponent(candidate.id))).place;
@@ -675,8 +678,9 @@ export default function App() {
     setCallBusy(true);
     try {
       const placeId=thread.discovery?.selected?.id||thread.discovery?.placeId;
-      if(!placeId)throw new Error('Search for the business again to verify its number.');
-      const result=await liveApi('/quote',{placeId});setQuoteData(result);setModal('callconfirm');
+      const destinationPhone=thread.discovery?.mode==='direct'?thread.discovery.intent.phone:undefined;
+      if(!placeId&&!destinationPhone)throw new Error('Search for the business again or provide a phone number with country code.');
+      const result=await liveApi('/quote',destinationPhone?{destinationPhone}:{placeId});setQuoteData(result);setModal('callconfirm');
     }catch(e){notify(e instanceof Error?e.message:'Could not prepare the call.');}
     finally{setCallBusy(false);}
   }
@@ -684,7 +688,8 @@ export default function App() {
     if(!thread||!quoteData||callBusy)return;
     setCallBusy(true);
     try{
-      const {call}=await liveApi('/calls',{threadId:thread.id,placeId:thread.discovery?.selected?.id||thread.discovery?.placeId,caller:quoteData.caller.phone,quotedRate:quoteData.rate,limit:thread.plan.limit,plan:thread.plan});
+      const destinationPhone=thread.discovery?.mode==='direct'?thread.discovery.intent.phone:undefined;
+      const {call}=await liveApi('/calls',{threadId:thread.id,...(destinationPhone?{destinationPhone}:{placeId:thread.discovery?.selected?.id||thread.discovery?.placeId}),caller:quoteData.caller.phone,quotedRate:quoteData.rate,limit:thread.plan.limit,plan:thread.plan});
       patchThread(thread.id,t=>({...t,status:'calling',callId:call.id,caller:call.caller,callStatus:call.status,started:Date.parse(call.created_at)}));setModal(null);
     }catch(e){notify(e instanceof Error?e.message:'Could not place the call.');}
     finally{setCallBusy(false);}
@@ -1892,6 +1897,7 @@ export default function App() {
       {modal === 'callconfirm' && thread && quoteData && (
         <ModalFrame title="Ready to call" subtitle={thread.plan.business} close={()=>setModal(null)}>
           <p>{thread.plan.request}</p>
+          <p>Calling <strong>{quoteData.place.phone}</strong></p>
           <label className="field-label">Call from
             <select value={quoteData.caller.phone} onChange={e=>setQuoteData({...quoteData,caller:quoteData.numbers.find(n=>n.phone===e.target.value)!})}>
               {quoteData.numbers.map(n=><option key={n.phone} value={n.phone}>{n.country||'International'} · {n.phone}</option>)}

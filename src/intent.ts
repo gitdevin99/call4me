@@ -2,6 +2,7 @@ import type { Kind, Plan } from "./model.ts";
 
 export type Intent = {
   business: string;
+  phone: string;
   area: string;
   request: string;
   kind: Kind;
@@ -27,7 +28,7 @@ export type Place = {
   rating?: number;
   openNow?: boolean;
   distance?: number;
-  source: "google" | "web" | "demo";
+  source: "google" | "web" | "demo" | "direct";
   attribution?: { name: string; uri?: string }[];
 };
 export type Discovery = {
@@ -37,12 +38,13 @@ export type Discovery = {
   selected?: Place;
   awaiting?: MissingField;
   error?: string;
-  mode?: "google" | "web" | "demo";
+  mode?: "google" | "web" | "demo" | "direct";
   pageToken?: string;
   query?: string;
 };
 export const blankIntent = (): Intent => ({
   business: "",
+  phone: "",
   area: "",
   request: "",
   kind: "other",

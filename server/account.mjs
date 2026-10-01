@@ -19,9 +19,9 @@ export function accountRouter(supabase){
   res.json({balance:wallet.rows[0]?.balance||0,reserved:wallet.rows[0]?.reserved||0,transactions:ledger.rows,calls:calls.rows});
  }));
  r.post('/checkout',wrap(async(req,res)=>res.json(await checkout(req.user.id,req.body.cents))));
- r.post('/quote',wrap(async(req,res)=>{const p=z.object({placeId:z.string().max(200),caller:z.string().optional()}).parse(req.body);res.json(await quote(p.placeId,p.caller));}));
+ r.post('/quote',wrap(async(req,res)=>{const p=z.object({placeId:z.string().max(200).optional(),destinationPhone:z.string().max(30).optional(),caller:z.string().optional()}).parse(req.body);res.json(await quote(p));}));
  r.post('/calls',wrap(async(req,res)=>{
-  const p=z.object({threadId:z.uuid(),placeId:z.string().max(200),caller:z.string(),quotedRate:z.number().int().min(1),limit:z.number().int().min(100).max(1000),plan:z.object({request:z.string().min(1).max(6000),name:z.string().max(100),date:z.string().max(30),time:z.string().max(30),guests:z.string().max(10)})}).parse(req.body);
+  const p=z.object({threadId:z.uuid(),placeId:z.string().max(200).optional(),destinationPhone:z.string().max(30).optional(),caller:z.string(),quotedRate:z.number().int().min(1),limit:z.number().int().min(100).max(1000),plan:z.object({business:z.string().max(200),request:z.string().min(1).max(6000),name:z.string().max(100),date:z.string().max(30),time:z.string().max(30),guests:z.string().max(10)})}).parse(req.body);
   res.json({call:await placeCall(req.user.id,p)});
  }));
  r.get('/calls/:id',wrap(async(req,res)=>{
