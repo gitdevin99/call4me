@@ -28,8 +28,7 @@ export function createTwilio(config, request = fetch) {
         signal: AbortSignal.timeout(15000),
       },
     );
-    if (!response.ok)
-      throw new Error(`Twilio request failed (${response.status}).`);
+    if (!response.ok) { const error=new Error(`Twilio request failed (${response.status}).`); error.status=response.status; throw error; }
     return response.json();
   }
   return {

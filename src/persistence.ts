@@ -22,7 +22,7 @@ export function persistentPreview(data: AppData): AppData {
           business: discovery.intent.business,
           phone: "",
         },
-        transcript: undefined,
+        transcript: thread.callId ? thread.transcript : undefined,
         discovery: {
           intent: discovery.intent,
           placeId: discovery.selected?.id,

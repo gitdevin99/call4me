@@ -196,7 +196,7 @@ export const questions: Record<
   { text: string; choices: string[] }
 > = {
   business: {
-    text: "Who should I call? A business name or a Google Maps link is enough.",
+    text: "Which business should I call? Tell me its name and I’ll find it.",
     choices: [],
   },
   area: { text: "Which city or neighbourhood should I look in?", choices: [] },

@@ -29,6 +29,9 @@ export type Thread = {
   duration?: number;
   transcript?: string;
   unread?: boolean;
+  callId?: string;
+  caller?: string;
+  callStatus?: string;
   discovery?: import("./intent").Discovery;
 };
 export type Transaction = {
@@ -205,7 +208,8 @@ export function seedData(): AppData {
     ],
   };
 }
-export const STORAGE_KEY = "call-for-me.preview.v1";
+export const emptyData = (): AppData => ({version:1,threads:[],balance:0,transactions:[],name:""});
+export const STORAGE_KEY = "canyoucall.live.v1";
 export function readData(): AppData {
   try {
     const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
@@ -219,7 +223,7 @@ export function readData(): AppData {
   } catch {
     /* A fresh preview is safe when saved data is unavailable. */
   }
-  return seedData();
+  return emptyData();
 }
 export function inferKind(text: string): Kind {
   if (/table|restaurant|dinner|lunch/i.test(text)) return "restaurant";

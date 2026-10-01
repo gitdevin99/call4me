@@ -1,3 +1,8 @@
+import {createServer} from 'node:http';
+import {accountRouter} from './account.mjs';
+import {whopWebhook,paymentsReady,startPaymentReconciliation} from './billing.mjs';
+import {attachVoice,voiceStart,voiceStatus} from './voice.mjs';
+import {liveReady,startCallReconciliation} from './calls.mjs';
 import { aiConfigured, aiConfig, transcribeAudio } from "./ai.mjs";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
@@ -10,6 +15,10 @@ import { telephonyStatus } from "./telephony.mjs";
 import { discoveryRouter } from "./discovery.mjs";
 const app = express();
 app.disable("x-powered-by");
+if(process.env.RENDER) app.set("trust proxy",1);
+app.post("/api/webhooks/whop",express.raw({type:"application/json",limit:"256kb"}),whopWebhook);
+app.post("/api/voice/start",express.urlencoded({extended:false}),voiceStart);
+app.post("/api/voice/status",express.urlencoded({extended:false}),voiceStatus);
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -31,14 +40,15 @@ app.get("/api/health", (_req, res) =>
     ok: true,
     chat: Boolean(aiConfigured() && supabase),
     auth: Boolean(supabase),
-    calling: false,
-    telephony: telephonyStatus(),
+    calling: liveReady(),
+    telephony: {...telephonyStatus(), calling: liveReady()},
     places: Boolean(process.env.GOOGLE_PLACES_API_KEY && supabase),
     webSearch: Boolean(process.env.BRAVE_SEARCH_API_KEY && supabase),
     transcription: Boolean(aiConfigured() && supabase),
-    payments: false,
+    payments: paymentsReady(),
   }),
 );
+app.use("/api/live", accountRouter(supabase));
 app.use("/api/concierge", discoveryRouter(supabase));
 app.use(
   "/api/chat",
@@ -54,7 +64,7 @@ app.post("/api/chat", async (req, res) => {
   if (!supabase || !aiConfigured())
     return res.status(503).json({
       error:
-        "AI chat is not connected yet. You can still explore the call preview.",
+        "The assistant is temporarily unavailable. Please try again.",
     });
   const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
   if (!token)
@@ -122,7 +132,11 @@ app.use((error, _req, res, _next) =>
     .json({ error: "The request could not be processed." }),
 );
 const host = process.env.HOST || "127.0.0.1";
-app.listen(Number(process.env.PORT) || 3001, host, () =>
+const server=createServer(app);
+attachVoice(server);
+startCallReconciliation();
+startPaymentReconciliation();
+server.listen(Number(process.env.PORT) || 3001, host, () =>
   console.log(
     `Call for me server listening on http://${host}:${process.env.PORT || 3001}`,
   ),

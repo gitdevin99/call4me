@@ -6,7 +6,6 @@ export function telephonyStatus(env = process.env) {
     twilio: Boolean(
       env.TWILIO_ACCOUNT_SID &&
         env.TWILIO_AUTH_TOKEN &&
-        env.TWILIO_FROM_NUMBER &&
         env.TWILIO_VOICE_URL &&
         env.TWILIO_STATUS_CALLBACK_URL,
     ),

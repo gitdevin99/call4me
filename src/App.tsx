@@ -40,7 +40,6 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import {
-  calendarFile,
   chatTime,
   emptyPlan,
   formatDate,
@@ -48,8 +47,7 @@ import {
   message,
   money,
   readData,
-  seedData,
-  settlePreviewCall,
+  emptyData,
   STORAGE_KEY,
   uid,
 } from "./model";
@@ -63,12 +61,12 @@ import {
   missingDetail,
   questions,
   intentPlan,
-  examplePlaces,
 } from "./intent";
 import type { Discovery, Intent, Place } from "./intent";
 
 type Page = "chats" | "wallet" | "profile";
 type Modal =
+  | "callconfirm"
   | "credit"
   | "auth"
   | "install"
@@ -106,7 +104,7 @@ const prompts = [
     kind: "other",
   },
 ] as const;
-const rate = 30;
+const rate = 60;
 function Wave({
   small = false,
   active = false,
@@ -189,10 +187,10 @@ function download(name: string, text: string, type = "text/plain") {
 export default function App() {
   const [data, setData] = useState<AppData>(readData);
   const [page, setPage] = useState<Page>("chats");
-  const [selected, setSelected] = useState<string | null>("olive");
+  const [selected, setSelected] = useState<string | null>(null);
   const [mobileChat, setMobileChat] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(()=>sessionStorage.getItem("pending-request")||"");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [toast, setToast] = useState("");
@@ -210,7 +208,13 @@ export default function App() {
     places: false,
     webSearch: false,
     transcription: false,
+    calling: false,
+    payments: false,
   });
+  const [quoteData, setQuoteData] = useState<{caller:{phone:string;country:string},numbers:{phone:string;country:string}[],rate:number} | null>(null);
+  const [callBusy, setCallBusy] = useState(false);
+  const [creditBusy, setCreditBusy] = useState(false);
+  const [reserved, setReserved] = useState(0);
   const [placeCount, setPlaceCount] = useState(3);
   const [tick, setTick] = useState(Date.now());
   const [menu, setMenu] = useState(false);
@@ -305,19 +309,19 @@ export default function App() {
         if (cancelled) return;
         if (error) {
           notify(
-            "Account connected. Cloud saving is unavailable; your preview is saved on this device.",
+            "Cloud saving is unavailable; your request is saved on this device.",
           );
           return;
         }
         if (row?.state?.version === 1 && Array.isArray(row.state.threads)) {
-          setData(row.state);
-          setProfileName(row.state.name);
+          setData({...row.state,balance:0,transactions:[],threads:row.state.threads.filter((t:Thread)=>!["olive","salon","garage"].includes(t.id))});
+          setProfileName(row.state.name === "Alex" ? "" : row.state.name);
           setSelected(row.state.threads[0]?.id ?? null);
         } else {
-          const fresh = seedData();
+          const fresh = emptyData();
           setData(fresh);
           setProfileName(fresh.name);
-          setSelected("olive");
+          setSelected(null);
         }
         setSyncReady(true);
       });
@@ -353,10 +357,31 @@ export default function App() {
     return () => clearInterval(timer);
   }, [active?.id]);
   useEffect(() => {
-    if (!active?.started) return;
-    const elapsed = Math.floor((tick - active.started) / 1000);
-    if (elapsed >= 24) finishCall(active.id, false);
-  }, [tick, active?.id]);
+    if(!session) return;
+    let cancelled=false;
+    const refresh=async()=>{try{
+      const result=await liveApi('/account');
+      if(cancelled)return;
+      setReserved(result.reserved);
+      setData(d=>({...d,balance:result.balance,transactions:result.transactions,threads:d.threads.map(t=>{
+        const c=result.calls.find((c:{thread_id:string})=>c.thread_id===t.id);if(!c)return t;
+        return {...t,callId:c.id,caller:c.caller,callStatus:c.status,status:c.ended_at?(c.status==='completed'?'completed':'cancelled'):'calling',started:Date.parse(c.created_at),cost:c.cost,duration:c.duration,transcript:c.transcript.map((x:{role:string;text:string})=>x.role+': '+x.text).join('\n')};
+      })}));
+    }catch(e){if(!cancelled)notify(e instanceof Error?e.message:'Could not load wallet.');}};
+    void refresh(); const timer=setInterval(refresh,15000);
+    return()=>{cancelled=true;clearInterval(timer);};
+  },[session?.user.id,syncReady]);
+  useEffect(()=>{
+    if(!active?.callId||!session)return;
+    let stopped=false;
+    const poll=async()=>{try{
+      const {call}=await liveApi('/calls/'+active.callId);
+      if(stopped)return;
+      const ended=Boolean(call.ended_at);
+      patchThread(active.id,t=>({...t,callStatus:call.status,status:ended?(call.status==='completed'?'completed':'cancelled'):'calling',cost:call.cost,duration:call.duration,transcript:call.transcript.map((x:{role:string;text:string})=>x.role+': '+x.text).join('\n'),messages:ended?[...t.messages,message('assistant',call.summary||`Call ended: ${call.status}. Review the transcript for the outcome.`)]:t.messages}));
+    }catch(e){notify(e instanceof Error?e.message:'Checking call status…');}};
+    void poll();const timer=setInterval(poll,5000);return()=>{stopped=true;clearInterval(timer);};
+  },[active?.callId,session?.user.id]);
 
   function selectChat(id: string) {
     setSelected(id);
@@ -391,13 +416,24 @@ export default function App() {
     if (!response.ok) throw new Error(result.error || "Please try again.");
     return result;
   }
+  async function liveApi(path:string,body?:unknown) {
+    const r=await fetch('/api/live'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(session?{Authorization:`Bearer ${session.access_token}`}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(30000)});
+    const result=await r.json();if(!r.ok)throw new Error(result.error||'Please try again.');return result;
+  }
+  async function reloadCredit(){
+    if(!session){setModal('auth');return;}
+    setCreditBusy(true);
+    try {const result=await liveApi('/checkout',{cents:amount});window.location.assign(result.url);}
+    catch(e){notify(e instanceof Error?e.message:'Checkout unavailable.');}
+    finally{setCreditBusy(false);}
+  }
   function finishDiscovery(id: string, discovery: Discovery) {
     const awaiting = missingDetail(discovery.intent);
     const ready = !!discovery.selected && !awaiting;
     const reply = awaiting
       ? questions[awaiting].text
       : discovery.selected
-        ? `Ready. Review the request below, or message me to change it. This is a simulated call; nobody will be contacted.`
+        ? `Ready. Review the request below, or message me to change it. You’ll see the caller number and spending limit before dialing.`
         : "Which location did you mean?";
     patchThread(id, (t) => ({
       ...t,
@@ -418,27 +454,7 @@ export default function App() {
     source: "google" | "web" = "google",
   ) {
     setPlaceCount(3);
-    if (!services.places && source === "google") {
-      patchThread(id, (t) => ({
-        ...t,
-        title: intent.business,
-        kind: intent.kind,
-        status: "draft",
-        discovery: {
-          intent,
-          candidates: examplePlaces(intent.business),
-          mode: "demo",
-        },
-        messages: [
-          ...t.messages,
-          message(
-            "assistant",
-            "Google Maps isn’t connected yet. These fictional branches let you try the one-tap selection flow. They are not search results.",
-          ),
-        ],
-      }));
-      return;
-    }
+    if (!services.places && source === "google") throw new Error("Business search is temporarily unavailable. Please try again.");
     if (!session) {
       patchThread(id, (t) => ({
         ...t,
@@ -454,6 +470,10 @@ export default function App() {
         : `${intent.business} ${intent.area}`.trim(),
       source,
     });
+    if(result.places.length===1 && source==='google') {
+      const selected=(await api('/places/'+encodeURIComponent(result.places[0].id))).place;
+      finishDiscovery(id,{intent,selected,mode:source});return;
+    }
     patchThread(id, (t) => ({
       ...t,
       title: intent.business,
@@ -506,6 +526,8 @@ export default function App() {
     e?.preventDefault();
     const text = (override ?? draft).trim();
     if (!text || busy.current) return;
+    if (!session) { sessionStorage.setItem("pending-request",text); setDraft(text); setModal("auth"); return; }
+    if (!connected || !online) { notify("The assistant is offline. Your request is kept here; try again shortly."); return; }
     if (text.length > 2000) {
       notify("Please keep your message under 2,000 characters.");
       return;
@@ -531,6 +553,7 @@ export default function App() {
       messages: [...t.messages, { ...message("user", text), audioId }],
     }));
     setDraft("");
+    sessionStorage.removeItem("pending-request");
     setTyping(id);
     busy.current = true;
     try {
@@ -542,7 +565,7 @@ export default function App() {
             message(
               "assistant",
               current!.status === "calling"
-                ? "Your note is saved. This preview cannot change a live call."
+                ? "This call is already running. End it before changing the request."
                 : "Start a new conversation for another call so this result stays intact.",
             ),
           ],
@@ -558,26 +581,17 @@ export default function App() {
       if (/^https:\/\//.test(text)) {
         intent.business = text;
       }
-      if (connected && session && online) {
+      if (session) {
         const result = await api("/prepare", {
           text,
           previous,
           awaiting: current.discovery?.awaiting,
           today: new Date().toLocaleDateString("en-CA"),
+          profileName: data.name,
         });
         intent = result.intent;
       }
-      const chosen =
-        current.discovery?.selected ||
-        (current.status === "ready"
-          ? {
-              id: "existing-preview",
-              name: current.plan.business,
-              address: "Example business",
-              phone: current.plan.phone,
-              source: "demo" as const,
-            }
-          : undefined);
+      const chosen = current.discovery?.selected;
       if (!intent.business) {
         finishDiscovery(id, { intent });
       } else if (
@@ -606,29 +620,30 @@ export default function App() {
       busy.current = false;
     }
   }
-  function startCall() {
-    if (!thread) return;
-    if (active) {
-      notify("Finish the current preview call first.");
-      return;
-    }
-    if (data.balance < thread.plan.limit) {
-      setModal("credit");
-      notify("Add preview credit to cover this call’s spending limit.");
-      return;
-    }
-    patchThread(thread.id, (t) => ({
-      ...t,
-      status: "calling",
-      started: Date.now(),
-      ended: undefined,
-      cost: undefined,
-      duration: undefined,
-    }));
-    setTick(Date.now());
+  async function startCall() {
+    if(!thread)return;
+    if(!session){setModal('auth');return;}
+    if(active){notify('Finish your current call first.');return;}
+    setCallBusy(true);
+    try {
+      const placeId=thread.discovery?.selected?.id||thread.discovery?.placeId;
+      if(!placeId)throw new Error('Search for the business again to verify its number.');
+      const result=await liveApi('/quote',{placeId});setQuoteData(result);setModal('callconfirm');
+    }catch(e){notify(e instanceof Error?e.message:'Could not prepare the call.');}
+    finally{setCallBusy(false);}
   }
-  function finishCall(id: string, cancelled: boolean) {
-    setData((d) => settlePreviewCall(d, id, cancelled));
+  async function confirmCall(){
+    if(!thread||!quoteData||callBusy)return;
+    setCallBusy(true);
+    try{
+      const {call}=await liveApi('/calls',{threadId:thread.id,placeId:thread.discovery?.selected?.id||thread.discovery?.placeId,caller:quoteData.caller.phone,quotedRate:quoteData.rate,limit:thread.plan.limit,plan:thread.plan});
+      patchThread(thread.id,t=>({...t,status:'calling',callId:call.id,caller:call.caller,callStatus:call.status,started:Date.parse(call.created_at)}));setModal(null);
+    }catch(e){notify(e instanceof Error?e.message:'Could not place the call.');}
+    finally{setCallBusy(false);}
+  }
+  async function finishCall(id:string,_cancelled:boolean){
+    const target=data.threads.find(t=>t.id===id);if(!target?.callId)return;
+    try{await liveApi('/calls/'+target.callId+'/end',{});notify('Ending the call…');}catch(e){notify(e instanceof Error?e.message:'Could not end call.');}
   }
   async function auth(e: FormEvent) {
     e.preventDefault();
@@ -668,11 +683,11 @@ export default function App() {
   async function signOut() {
     setSyncReady(false);
     await supabase?.auth.signOut();
-    const fresh = seedData();
+    const fresh = emptyData();
     setData(fresh);
     setProfileName(fresh.name);
-    setSelected("olive");
-    notify("Signed out. You’re back in the guest preview.");
+    setSelected(null);
+    notify("Signed out.");
   }
 
   const shown = data.threads.filter(
@@ -686,14 +701,9 @@ export default function App() {
         .includes(query.toLowerCase()),
   );
   const elapsed = thread?.started
-    ? Math.min(24, Math.max(0, Math.floor((tick - thread.started) / 1000)))
+    ? Math.max(0, Math.floor((tick - thread.started) / 1000))
     : 0;
-  const callingText =
-    elapsed < 4
-      ? "Dialling the business"
-      : elapsed < 9
-        ? "Waiting for an answer"
-        : "Speaking to the business";
+  const callingText = thread?.callStatus==='in-progress'?'Speaking to the business':thread?.callStatus==='ringing'?'Ringing the business':'Connecting the call';
   const completed = data.threads.filter((t) => t.status === "completed").length;
 
   return (
@@ -753,11 +763,11 @@ export default function App() {
       <div className="app-main">
         <header className="desktop-topbar">
           <div className="wordmark">
-            call for me<span className="wordmark-dot">.</span>
+            can you call<span className="wordmark-dot">.</span>
           </div>
           <div className="topbar-right">
             <span className="preview-label">
-              <span /> Interactive preview
+              <span /> Your calling assistant
             </span>
             <button
               className="text-button muted"
@@ -795,8 +805,8 @@ export default function App() {
               <section className="inbox" aria-label="Conversations">
                 <div className="inbox-top">
                   <div className="mobile-wordmark">
-                    call for me<span>.</span>
-                    <span className="mobile-preview">Preview</span>
+                    can you call<span>.</span>
+                    <span className="mobile-preview">Can You Call</span>
                   </div>
                   <div className="title-row">
                     <h1>
@@ -817,7 +827,7 @@ export default function App() {
                     <span>
                       <Wallet size={17} />{" "}
                       <span>
-                        Preview balance <strong>{money(data.balance)}</strong>
+                        Available credit <strong>{money(data.balance)}</strong>
                       </span>
                     </span>
                     <span className="balance-action">
@@ -876,7 +886,7 @@ export default function App() {
                               : t.status === "draft"
                                 ? "Let’s get the details"
                                 : t.status === "cancelled"
-                                  ? "Preview call ended"
+                                  ? "Call ended"
                                   : t.id === "salon"
                                     ? "Booked for 3pm"
                                     : t.id === "garage"
@@ -939,7 +949,7 @@ export default function App() {
                     <span>
                       <i />
                       {thread?.status === "calling"
-                        ? "Preview call in progress"
+                        ? "Call in progress"
                         : "Here to take it off your hands"}
                     </span>
                   </div>
@@ -1261,7 +1271,7 @@ export default function App() {
                               <Phone size={15} />
                             </span>{" "}
                             READY TO CALL{" "}
-                            <span className="sample-tag">PREVIEW</span>
+
                           </div>
                           <div className="venue-heading">
                             <div>
@@ -1269,7 +1279,7 @@ export default function App() {
                               <p>{thread.discovery?.selected?.address}</p>
                               <p>
                                 {thread.plan.phone ||
-                                  "No phone listed — preview only"}
+                                  "No phone listed"}
                               </p>
                               {thread.discovery?.selected?.source ===
                                 "google" && (
@@ -1312,7 +1322,7 @@ export default function App() {
                           <div className="rate-row">
                             <span>
                               <strong>
-                                $0.30<span>/min</span>
+                                From {money(rate)}<span>/min</span>
                               </strong>
                               <small>Billed per second</small>
                             </span>
@@ -1322,7 +1332,7 @@ export default function App() {
                                 <span> limit</span>
                               </strong>
                               <select
-                                aria-label="Maximum preview spend"
+                                aria-label="Maximum spend"
                                 value={thread.plan.limit}
                                 onChange={(e) =>
                                   patchThread(thread.id, (t) => ({
@@ -1345,8 +1355,9 @@ export default function App() {
                           <button
                             className="primary call-primary"
                             onClick={startCall}
+                            disabled={callBusy}
                           >
-                            <Phone size={17} /> Try a preview call{" "}
+                            <Phone size={17} /> {callBusy ? "Checking number…" : "Review & call"}{" "}
                             <ArrowUpRight size={17} />
                           </button>
                           <button className="edit-details" onClick={openPlan}>
@@ -1361,7 +1372,7 @@ export default function App() {
                               <span className="live-dot" /> {callingText}
                             </span>
                             <strong>
-                              00:{String(elapsed).padStart(2, "0")}
+                              {Math.floor(elapsed/60)}:{String(elapsed%60).padStart(2, "0")}
                             </strong>
                           </div>
                           <div className="large-wave" aria-hidden="true">
@@ -1376,7 +1387,7 @@ export default function App() {
                             ))}
                           </div>
                           <p className="live-business">
-                            {thread.plan.business} <span>· Simulated call</span>
+                            {thread.plan.business} <span>· AI assistant</span>
                           </p>
                           <div className="card-divider" />
                           <div className="rate-row">
@@ -1384,7 +1395,7 @@ export default function App() {
                               <strong>
                                 {money(Math.ceil((elapsed * rate) / 60))}
                               </strong>
-                              <small>Preview usage</small>
+                              <small>Estimated usage</small>
                             </span>
                             <span>
                               <strong>{money(thread.plan.limit)}</strong>
@@ -1395,10 +1406,10 @@ export default function App() {
                             className="end-call"
                             onClick={() => finishCall(thread.id, true)}
                           >
-                            <PhoneOff size={16} /> End preview call
+                            <PhoneOff size={16} /> End call
                           </button>
                           <p className="call-fineprint">
-                            This 24-second preview won’t contact anyone.
+                            The call ends at your spending limit.
                           </p>
                         </div>
                       )}
@@ -1411,15 +1422,9 @@ export default function App() {
                               </span>
                               <div>
                                 <h3>
-                                  {thread.kind === "restaurant" &&
-                                  thread.plan.date
-                                    ? "Table confirmed"
-                                    : thread.kind === "salon" &&
-                                        thread.plan.date
-                                      ? "Appointment booked"
-                                      : "Call completed"}
+                                  Call finished
                                 </h3>
-                                <small>Example result · no real booking</small>
+                                <small>Review the transcript for the outcome</small>
                               </div>
                             </div>
                             <div className="result-details">
@@ -1441,27 +1446,11 @@ export default function App() {
                                     : ""}
                                   {thread.plan.name
                                     ? `Under ${thread.plan.name}`
-                                    : "Example response — no real business contacted"}
+                                    : ""}
                                 </p>
                               </div>
                             </div>
-                            {thread.plan.date && thread.plan.time && (
-                              <button
-                                className="calendar-button"
-                                onClick={() => {
-                                  download(
-                                    "preview-booking.ics",
-                                    calendarFile(thread),
-                                    "text/calendar",
-                                  );
-                                  notify(
-                                    "Example calendar event downloaded. No real booking was made.",
-                                  );
-                                }}
-                              >
-                                <CalendarDays size={17} /> Add to calendar
-                              </button>
-                            )}
+
                           </div>
                           <div className="receipt">
                             <div>
@@ -1475,11 +1464,11 @@ export default function App() {
                               </strong>
                             </div>
                             <div>
-                              <span>Preview charge</span>
+                              <span>Call charge</span>
                               <strong>{money(thread.cost || 0)}</strong>
                             </div>
                             <div className="receipt-total">
-                              <span>Remaining preview credit</span>
+                              <span>Remaining credit</span>
                               <strong>{money(data.balance)}</strong>
                             </div>
                           </div>
@@ -1575,8 +1564,8 @@ export default function App() {
                       <Wave small />
                     </span>{" "}
                     {connected && session
-                      ? "AI assistant · Calls are in preview mode"
-                      : "Preview mode · No real calls or charges"}
+                      ? "AI assistant · Pay as you go"
+                      : "Sign in to ask your assistant"}
                     <span className="desktop-only">Press ↵ to send</span>
                   </p>
                 </div>
@@ -1597,21 +1586,20 @@ export default function App() {
                 <section className="wallet-balance">
                   <div className="wallet-balance-top">
                     <span>
-                      <Wallet size={19} /> Available preview credit
+                      <Wallet size={19} /> Available credit
                     </span>
-                    <span className="sample-tag">PREVIEW</span>
+
                   </div>
                   <strong className="balance-number">
                     {money(data.balance)}
                   </strong>
                   <p>
-                    About {Math.floor(data.balance / rate)} minutes of
-                    conversation
+                    Rates depend on destination. Review the exact rate before calling.
                   </p>
                   {active && (
                     <p className="reserved-note">
                       {money(active.plan.limit)} spending limit on your active
-                      preview
+                      call
                     </p>
                   )}
                   <button
@@ -1660,8 +1648,8 @@ export default function App() {
                           })}{" "}
                           ·{" "}
                           {t.type === "credit"
-                            ? "Preview top-up"
-                            : "Preview call"}
+                            ? "Credit reload"
+                            : "Call"}
                         </small>
                       </div>
                       <b className={t.type === "credit" ? "positive" : ""}>
@@ -1671,8 +1659,7 @@ export default function App() {
                     </div>
                   ))}
                   <p className="activity-note">
-                    <Info size={14} /> These are preview transactions. No money
-                    has been charged.
+                    <Info size={14} /> Your confirmed reloads and call charges appear here.
                   </p>
                 </section>
               </div>
@@ -1696,7 +1683,7 @@ export default function App() {
                       {session?.user.email || "Guest · saved on this device"}
                     </p>
                     <span className="profile-pill">
-                      {completed} preview calls completed
+                      {completed} calls completed
                     </span>
                   </div>
                   <form
@@ -1740,7 +1727,7 @@ export default function App() {
                       </strong>
                       <small>
                         {session
-                          ? "Return to guest preview"
+                          ? "Sign out"
                           : "One secure email link. No password."}
                       </small>
                     </span>
@@ -1777,7 +1764,7 @@ export default function App() {
                         JSON.stringify(persistentPreview(data), null, 2),
                         "application/json",
                       );
-                      notify("Your preview data has been exported.");
+                      notify("Your conversations have been exported.");
                     }}
                   >
                     <span className="setting-icon">
@@ -1797,15 +1784,15 @@ export default function App() {
                       <Settings2 size={21} />
                     </span>
                     <span>
-                      <strong>Reset the preview</strong>
-                      <small>Start fresh with the example conversations.</small>
+                      <strong>Clear conversations</strong>
+                      <small>Clear your saved conversation list. Your wallet is kept.</small>
                     </span>
                     <ChevronRight size={17} />
                   </button>
                   <div className="privacy-note">
                     <ShieldCheck size={20} />
                     <p>
-                      Your preview stays in this browser. When connected and
+                      Your conversations stay on this device. When
                       signed in, it also syncs to your private Supabase account.
                     </p>
                   </div>
@@ -1851,6 +1838,20 @@ export default function App() {
           </button>
         </div>
       )}
+      {modal === 'callconfirm' && thread && quoteData && (
+        <ModalFrame title="Ready to call" subtitle={thread.plan.business} close={()=>setModal(null)}>
+          <p>{thread.plan.request}</p>
+          <label className="field-label">Call from
+            <select value={quoteData.caller.phone} onChange={e=>setQuoteData({...quoteData,caller:quoteData.numbers.find(n=>n.phone===e.target.value)!})}>
+              {quoteData.numbers.map(n=><option key={n.phone} value={n.phone}>{n.country||'International'} · {n.phone}</option>)}
+            </select>
+          </label>
+          <p>{money(quoteData.rate)}/min · billed per second · {money(thread.plan.limit)} maximum</p>
+          <p>The assistant identifies itself as AI. Your call transcript is saved to your account.</p>
+          {data.balance-reserved<thread.plan.limit ? <button className="primary full-width" onClick={()=>setModal('credit')}>Reload credit</button> : <button className="primary full-width" disabled={callBusy||!services.calling} onClick={confirmCall}>{callBusy?'Connecting…':'Call now'}</button>}
+          {!services.calling&&<p className="modal-footnote">Live calling is awaiting its connection test. You can prepare your request now.</p>}
+        </ModalFrame>
+      )}
       {modal === "credit" && (
         <ModalFrame
           title="A little top-up."
@@ -1858,7 +1859,7 @@ export default function App() {
           close={() => setModal(null)}
         >
           <div className="credit-current">
-            <Wallet size={18} /> Current preview balance{" "}
+            <Wallet size={18} /> Current balance{" "}
             <strong>{money(data.balance)}</strong>
           </div>
           <div className="amounts">
@@ -1870,7 +1871,7 @@ export default function App() {
               >
                 {v === 1000 && <span>JUST RIGHT</span>}
                 <strong>{money(v).replace(".00", "")}</strong>
-                <small>~{Math.floor(v / 30)} minutes</small>
+                <small>Credit for calls</small>
                 {amount === v && <CircleCheck size={17} />}
               </button>
             ))}
@@ -1885,31 +1886,13 @@ export default function App() {
           </div>
           <button
             className="primary full-width"
-            onClick={() => {
-              setData((d) => ({
-                ...d,
-                balance: d.balance + amount,
-                transactions: [
-                  {
-                    id: uid(),
-                    title: "Preview credit added",
-                    cents: amount,
-                    at: new Date().toISOString(),
-                    type: "credit",
-                  },
-                  ...d.transactions,
-                ],
-              }));
-              setModal(null);
-              notify(
-                `${money(amount)} preview credit added. No payment was taken.`,
-              );
-            }}
+            disabled={creditBusy || !services.payments}
+            onClick={reloadCredit}
           >
-            Add {money(amount)} preview credit <ArrowRight size={18} />
+            {creditBusy ? "Opening checkout…" : `Reload ${money(amount)}`} <ArrowRight size={18} />
           </button>
           <p className="modal-footnote">
-            Preview only. Real checkout isn’t connected yet.
+            {services.payments ? "Secure checkout with Whop. Credit arrives after payment confirmation." : "Checkout is being connected. No payment can be taken yet."}
           </p>
         </ModalFrame>
       )}
@@ -1950,7 +1933,7 @@ export default function App() {
           )}
           {!supabase && (
             <p className="modal-footnote">
-              Account connection is pending. The guest preview works now.
+              Sign-in is temporarily unavailable.
             </p>
           )}
           <button className="guest-button" onClick={() => setModal(null)}>
@@ -1961,16 +1944,16 @@ export default function App() {
       {modal === "transcript" && thread && (
         <ModalFrame
           title="Call transcript"
-          subtitle={`${thread.plan.business} · Simulated conversation`}
+          subtitle={`${thread.plan.business} · Call transcript`}
           close={() => setModal(null)}
         >
           <pre className="transcript">
-            {thread.transcript || "This preview has no transcript yet."}
+            {thread.transcript || "No transcript is available for this call."}
           </pre>
           <button
             className="secondary full-width"
             onClick={() =>
-              download("preview-transcript.txt", thread.transcript || "")
+              download("call-transcript.txt", thread.transcript || "")
             }
           >
             <Download size={16} /> Download transcript
@@ -2031,7 +2014,7 @@ export default function App() {
               {
                 icon: Phone,
                 title: "We handle the conversation",
-                text: "See the call’s progress and answer any follow-up questions here.",
+                text: "See the call’s progress and read the transcript here.",
               },
               {
                 icon: CheckCheck,
@@ -2053,9 +2036,7 @@ export default function App() {
           <div className="preview-explanation">
             <Info size={17} />
             <p>
-              You’re exploring an interactive preview. Calls, bookings, and
-              wallet credit are simulated. No business is contacted and no
-              payment is taken.
+              Choose a business, review the request, and approve the call. Your assistant identifies itself as AI. You pay from prepaid credit with a spending limit.
             </p>
           </div>
         </ModalFrame>
@@ -2063,7 +2044,7 @@ export default function App() {
       {modal === "reset" && (
         <ModalFrame
           title="Start fresh?"
-          subtitle="This replaces your preview conversations and credit with the original examples. Export your data first if you want to keep it."
+          subtitle="This clears your conversation list. Your wallet and server call records are kept. Export your conversations first if needed."
           close={() => setModal(null)}
         >
           <button
@@ -2082,18 +2063,18 @@ export default function App() {
             className="primary full-width reset-confirm"
             onClick={() => {
               if (active) {
-                notify("End your active preview call before resetting.");
+                notify("End your active call before clearing conversations.");
                 return;
               }
-              const fresh = seedData();
+              const fresh = {...emptyData(),balance:data.balance,transactions:data.transactions,name:data.name};
               setData(fresh);
               setProfileName(fresh.name);
-              setSelected("olive");
+              setSelected(null);
               setModal(null);
-              notify("Your preview has been reset.");
+              notify("Conversations cleared.");
             }}
           >
-            Reset preview
+            Clear conversations
           </button>
         </ModalFrame>
       )}
