@@ -1521,7 +1521,7 @@ export default function App() {
                               </div>
                             </div>
                             {thread.callOutcome !== 'reviewing' && thread.callSummary && <p className="call-result-summary">{thread.callSummary}</p>}
-                            {thread.nextStep && <div className="next-step-box"><span>Suggested next step</span><p>{thread.nextStep}</p>{thread.followUpQuestion && <strong>{thread.followUpQuestion}</strong>}{thread.callOutcome === 'needs_input' && <button onClick={() => composer.current?.focus()}>Answer in chat <ArrowRight size={15}/></button>}{thread.callOutcome === 'unconfirmed' && <button onClick={() => newChat(`Please call ${thread.plan.phone} to verify: ${thread.plan.request}`)}>Prepare another call <ArrowRight size={15}/></button>}</div>}
+                            {thread.callOutcome !== 'confirmed' && thread.nextStep && <div className="next-step-box"><span>Suggested next step</span><p>{thread.nextStep}</p>{thread.followUpQuestion && <strong>{thread.followUpQuestion}</strong>}{thread.callOutcome === 'needs_input' && <button onClick={() => composer.current?.focus()}>Answer in chat <ArrowRight size={15}/></button>}{thread.callOutcome === 'unconfirmed' && <button onClick={() => newChat(`Please call ${thread.plan.phone} to verify: ${thread.plan.request}`)}>Prepare another call <ArrowRight size={15}/></button>}</div>}
                           </div>
                           <div className="receipt">
                             <div>

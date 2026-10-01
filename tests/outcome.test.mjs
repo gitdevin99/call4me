@@ -2,10 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizeReview,reviewCall} from '../server/outcome.mjs';
 
-const booking={plan:{request:'Book a table for two tomorrow evening.'},transcript:[{role:'Business',text:'Yes, that.'},{role:'Assistant',text:'Great, the reservation is confirmed.'}]};
+const booking={plan:{request:'Book a table for two tomorrow evening.'},transcript:[{role:'Assistant',text:"Great, to confirm: we'll book a table for two tomorrow at 5 p.m. Does that sound right to you?"},{role:'Business',text:'Yes, that.'},{role:'Assistant',text:'Great, the reservation is confirmed.'}]};
 
-test('an agreeable but ambiguous recipient reply does not verify a reservation',()=>{
- const result=normalizeReview({status:'confirmed',summary:'Confirmed at 5 p.m.',recipient_evidence:'Yes, that.',next_step:'No further action needed.'},booking);
+test('an affirmative answer to the full booking recap confirms the call and needs no next step',()=>{
+ const result=normalizeReview({status:'confirmed',summary:'The person on the call agreed to a table for two tomorrow at 5 p.m.',recipient_evidence:'Yes, that.',next_step:'Call again to verify.'},booking);
+ assert.equal(result.status,'confirmed');
+ assert.equal(result.nextStep,'');
+ assert.equal(result.question,'');
+ assert.equal(result.reviewVersion,'2');
+});
+
+test('a reviewer explanation containing a quoted recipient answer still uses that answer as evidence',()=>{
+ const result=normalizeReview({status:'confirmed',summary:'The person agreed to a table for two tomorrow at 5 p.m.',recipient_evidence:'After the full recap the recipient replied, "Yes, that."',next_step:''},booking);
+ assert.equal(result.status,'confirmed');
+ assert.equal(result.nextStep,'');
+});
+
+test('a yes to time availability alone does not verify a reservation',()=>{
+ const availability={...booking,transcript:[{role:'Assistant',text:'Would tomorrow at 5 p.m. work for a table for two?'},{role:'Business',text:'Yes, that.'},{role:'Assistant',text:'Great, the reservation is confirmed.'}]};
+ const result=normalizeReview({status:'confirmed',summary:'Confirmed at 5 p.m.',recipient_evidence:'Yes, that.'},availability);
  assert.equal(result.status,'unconfirmed');
  assert.match(result.summary,/did not clearly verify/);
 });
