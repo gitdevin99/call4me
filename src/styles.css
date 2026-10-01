@@ -25,6 +25,14 @@
 body {
   margin: 0;
 }
+/* One mobile-sized workspace at every viewport; compact rules follow its width. */
+#root {
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
+  container-type: inline-size;
+}
+
 button,
 input,
 textarea,
@@ -100,7 +108,11 @@ button:hover {
   display: flex;
   height: 100dvh;
   min-height: 500px;
-  max-width: 1800px;
+  width: 100%;
+  max-width: 480px;
+  position: relative;
+  transform: translateZ(0);
+  box-shadow: 0 0 0 1px var(--line), 0 12px 60px #2536500a;
   margin: auto;
   background: white;
   overflow: hidden;
@@ -1993,7 +2005,7 @@ button:hover {
   font-size: 11px;
   line-height: 1.6;
   z-index: 20;
-  max-width: min(520px, calc(100vw - 30px));
+  max-width: calc(100% - 30px);
   width: max-content;
   animation: toast-in 0.25s ease;
 }
@@ -2210,7 +2222,7 @@ button:hover {
     padding-right: 35px;
   }
 }
-@media (max-width: 760px) {
+@container (max-width: 760px) {
   .app-shell {
     min-height: 0;
   }
@@ -2737,7 +2749,7 @@ button:hover {
     font-size: 12px;
   }
 }
-@media (max-width: 370px) {
+@container (max-width: 370px) {
   .inbox-top {
     padding-left: 20px;
     padding-right: 20px;
@@ -2801,7 +2813,7 @@ button:hover {
 .voice-actions audio {width:190px;height:32px;}
 .voice-note>p {font-size:12px;color:#a05245;}
 .recording-dot {width:8px;height:8px;border-radius:100%;background:#e65464;}
-@media(max-width:700px){.discovery-panel{width:100%;}.voice-hint{font-size:10px;}.voice-actions audio{width:155px;}.discovery-heading{align-items:flex-start;}.discovery-heading>span{white-space:nowrap;}}
+@container(max-width:700px){.discovery-panel{width:100%;}.voice-hint{font-size:10px;}.voice-actions audio{width:155px;}.discovery-heading{align-items:flex-start;}.discovery-heading>span{white-space:nowrap;}}
 .rate-row select {display:block;max-width:150px;margin-top:7px;padding:6px 8px;border:1px solid #dde7f5;border-radius:8px;background:#f7faff;color:#65758b;font:inherit;font-size:11px;}
 .venue-heading a {font-size:11px;color:#1672ed;}
 .voice-mic-button,.voice-send {width:44px;height:44px;flex-shrink:0;border:0;border-radius:50%;background:#147aff;color:white;display:grid;place-items:center;transition:transform .15s,background .15s;}
