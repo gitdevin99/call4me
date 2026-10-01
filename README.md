@@ -8,7 +8,7 @@ Use Node 22.13+. Copy `.env.example` to `.env`, install with `npm ci`, then run 
 
 ## Production architecture
 
-- Supabase authenticates users. Configure production SMTP for public email magic links and allow the production origin in Auth URL configuration.
+- Supabase authenticates users through the Google popup sign-in flow. The public client ID is built into the frontend; its secret stays in Supabase. See [Google sign-in setup](docs/google-signin.md) for device QA and environment details.
 - `public.preview_states` stores owner-scoped conversation state for compatibility. Its browser-editable balance fields are never trusted for money.
 - `supabase/live.sql` defines private `callapp` wallets, orders, ledger, calls, and payment jobs. Only the server database role accesses these tables. The deployed runtime role uses explicit schema/table grants and RLS policies.
 - Google Places supplies business matches and verified phone numbers. The assistant extracts the business from the request and asks only for missing details.
