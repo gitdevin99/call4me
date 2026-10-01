@@ -2835,3 +2835,61 @@ button:hover {
 .voice-track input{position:absolute;top:0;left:0;width:100%;height:32px;opacity:.01;cursor:pointer;}.voice-track input:focus-visible{opacity:.6;}.voice-track small{font-size:11px;}.voice-speed{font-size:11px;min-width:25px;}.has-voice>span{display:block;font-size:12px;opacity:.85;border-top:1px solid #ffffff30;padding-top:9px;}.voice-unavailable{display:block;margin-bottom:8px;}
 @keyframes recording-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.recording-panel{animation:none}.recording-wave i{transition:none}}
+
+/* The document stays still. Only the active screen's content can scroll. */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+body {
+  position: fixed;
+  inset: 0;
+}
+#root {
+  position: fixed;
+  inset-inline: 0;
+  top: var(--app-top, 0px);
+  height: var(--app-height, 100dvh);
+  overflow: hidden;
+}
+.app-shell {
+  height: 100%;
+  min-height: 0;
+}
+.app-main,
+.chat-panel {
+  min-height: 0;
+  min-width: 0;
+}
+.inbox,
+.chat-scroll,
+.full-page,
+.modal {
+  overflow-x: hidden;
+  overscroll-behavior: none;
+  touch-action: pan-y pinch-zoom;
+}
+.app-shell input,
+.app-shell textarea,
+.app-shell select {
+  /* Avoid Safari's automatic focus zoom on small form text. */
+  font-size: 16px;
+}
+button,
+a {
+  touch-action: manipulation;
+}
+.modal {
+  max-height: calc(100% - 28px);
+}
+html[data-keyboard="true"] .composer-area {
+  padding-bottom: 8px;
+}
+html[data-keyboard="true"] .composer-caption {
+  display: none;
+}

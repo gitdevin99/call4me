@@ -349,7 +349,11 @@ export default function App() {
     return () => clearTimeout(t);
   }, [data, session, syncReady]);
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const scroller = endRef.current?.closest(".chat-scroll");
+    scroller?.scrollTo({
+      top: scroller.scrollHeight,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
   }, [selected, thread?.messages.length, thread?.status, typing]);
   useEffect(() => {
     if (!active) return;
