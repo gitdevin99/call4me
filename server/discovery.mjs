@@ -1,6 +1,6 @@
 import {insideBounds} from './geography.mjs';
 import {intentSchema,assistantSchema,conversationPrompt} from './conversation.mjs';
-import { aiConfigured, aiConfig, transcribeAudio } from "./ai.mjs";
+import { aiConfigured, aiConfig, chatOptions, transcribeAudio } from "./ai.mjs";
 import { Router, raw } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
@@ -229,7 +229,7 @@ export function discoveryRouter(supabase) {
             },
             { role: "user", content: JSON.stringify(parsed.data) },
           ],
-          max_tokens: 1200,
+          ...chatOptions(1200),
         }),
       });
       const decision = assistantSchema.parse(

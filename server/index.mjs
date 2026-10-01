@@ -3,7 +3,7 @@ import {accountRouter} from './account.mjs';
 import {whopWebhook,paymentsReady,startPaymentReconciliation} from './billing.mjs';
 import {attachVoice,voiceStart,voiceStatus} from './voice.mjs';
 import {liveReady,startCallReconciliation} from './calls.mjs';
-import { aiConfigured, aiConfig, transcribeAudio } from "./ai.mjs";
+import { aiConfigured, aiConfig, chatOptions, transcribeAudio } from "./ai.mjs";
 import express from "express";
 import { rateLimit } from "express-rate-limit";
 import { createClient } from "@supabase/supabase-js";
@@ -39,6 +39,7 @@ app.get("/api/health", (_req, res) =>
   res.json({
     ok: true,
     chat: Boolean(aiConfigured() && supabase),
+    chatModel: aiConfigured() ? aiConfig().model : null,
     auth: Boolean(supabase),
     calling: liveReady(),
     telephony: {...telephonyStatus(), calling: liveReady()},
@@ -96,7 +97,7 @@ app.post("/api/chat", async (req, res) => {
           { role: "system", content: systemPrompt },
           ...body.data.messages,
         ],
-        max_tokens: 350,
+        ...chatOptions(350),
       }),
     });
     if (!response.ok)

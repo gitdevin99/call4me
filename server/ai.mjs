@@ -8,7 +8,7 @@ export function aiConfig() {
       ? "https://api.openai.com/v1/chat/completions"
       : "https://openrouter.ai/api/v1/chat/completions",
     model: direct
-      ? process.env.OPENAI_MODEL || "gpt-4.1-mini"
+      ? process.env.OPENAI_MODEL || "gpt-5.4"
       : process.env.OPENROUTER_MODEL || "openai/gpt-4.1-mini",
   };
 }
@@ -46,4 +46,12 @@ export async function transcribeAudio(audio, format, request = fetch) {
       "Transcription is unavailable. Your recording is still saved for retry.",
     );
   return response.json();
+}
+
+// Reasoning models count their internal reasoning in the completion budget.
+export function chatOptions(outputTokens) {
+  const model = aiConfig().model.split('/').at(-1);
+  return /^gpt-5(?:[.-]|$)/.test(model)
+    ? { max_completion_tokens: outputTokens + 3000, reasoning_effort: "low" }
+    : { max_tokens: outputTokens };
 }
