@@ -1,3 +1,4 @@
+import {readPending,savePending,clearPending} from './pending';
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -188,9 +189,9 @@ export default function App() {
   const [data, setData] = useState<AppData>(readData);
   const [page, setPage] = useState<Page>("chats");
   const [selected, setSelected] = useState<string | null>(null);
-  const [mobileChat, setMobileChat] = useState(false);
+  const [mobileChat, setMobileChat] = useState(()=>Boolean(readPending()));
   const [modal, setModal] = useState<Modal>(null);
-  const [draft, setDraft] = useState(()=>sessionStorage.getItem("pending-request")||"");
+  const [draft, setDraft] = useState(()=>readPending()?.text||sessionStorage.getItem("pending-request")||"");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [toast, setToast] = useState("");
@@ -223,6 +224,9 @@ export default function App() {
   const endRef = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const busy = useRef(false);
+  const resumed = useRef<string|null>(null);
+  const [location,setLocation]=useState<{latitude:number;longitude:number}|null>(null);
+  const [locating,setLocating]=useState(false);
   const authUser = useRef<string | null>(null);
   const {
     needRefresh: [needRefresh],
@@ -348,6 +352,20 @@ export default function App() {
     }, 800);
     return () => clearTimeout(t);
   }, [data, session, syncReady]);
+  useEffect(()=>{
+    const pending=readPending();
+    if(!pending||!session||!syncReady||!connected||!online||busy.current||resumed.current===pending.id)return;
+    if(pending.email&&pending.email!==session.user.email?.toLowerCase())return;
+    resumed.current=pending.id;
+    setPage('chats');setMobileChat(true);setSelected(pending.threadId);
+    void sendMessage(undefined,pending.text,undefined,pending.threadId);
+  },[session?.user.id,syncReady,connected,online]);
+  useEffect(()=>{
+    // Previously granted permission can be reused without interrupting the user.
+    navigator.permissions?.query({name:'geolocation'}).then(p=>{
+      if(p.state==='granted')navigator.geolocation.getCurrentPosition(p=>setLocation({latitude:p.coords.latitude,longitude:p.coords.longitude}),()=>{}, {timeout:8000,maximumAge:300000});
+    }).catch(()=>{});
+  },[]);
   useEffect(() => {
     const scroller = endRef.current?.closest(".chat-scroll");
     scroller?.scrollTo({
@@ -431,8 +449,8 @@ export default function App() {
     catch(e){notify(e instanceof Error?e.message:'Checkout unavailable.');}
     finally{setCreditBusy(false);}
   }
-  function finishDiscovery(id: string, discovery: Discovery) {
-    const awaiting = missingDetail(discovery.intent);
+  function finishDiscovery(id: string, discovery: Discovery, assistantReply?: string) {
+    const awaiting = assistantReply ? discovery.awaiting : missingDetail(discovery.intent);
     const ready = !!discovery.selected && !awaiting;
     const reply = awaiting
       ? questions[awaiting].text
@@ -449,13 +467,39 @@ export default function App() {
       plan: discovery.selected
         ? intentPlan(discovery.intent, discovery.selected, t.plan.limit)
         : t.plan,
-      messages: [...t.messages, message("assistant", reply)],
+      messages: [...t.messages, message("assistant", assistantReply || reply)],
     }));
+  }
+  function contextFor(current?:Thread|null) {
+    return {
+      history:(current?.messages||[]).slice(-20).map(m=>({role:m.role,text:m.text.slice(0,2000)})),
+      candidates:(current?.discovery?.candidates||[]).slice(0,10).map(p=>({id:p.id,name:p.name,address:p.address})),
+      ...(current?.discovery?.selected?{selected:{id:current.discovery.selected.id,name:current.discovery.selected.name,address:current.discovery.selected.address}}:{}),
+      hasLocation:!!location, timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
+  }
+  async function continueWithPlace(id:string,intent:Intent,place:Place){
+    const current=data.threads.find(t=>t.id===id);
+    const next=await api('/prepare',{text:'Continue with the selected business.',previous:intent,today:new Date().toLocaleDateString('en-CA'),profileName:data.name,...contextFor(current),selected:{id:place.id,name:place.name,address:place.address},phase:'selected'});
+    finishDiscovery(id,{intent:next.intent,selected:place,mode:'google',awaiting:next.awaiting||undefined},next.reply);
+  }
+  async function useLocation(){
+    if(!navigator.geolocation){notify('Location is unavailable. Type a city instead.');return;}
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(async p=>{
+      const value={latitude:p.coords.latitude,longitude:p.coords.longitude};setLocation(value);
+      try{
+        if(thread?.discovery){setTyping(thread.id);await findPlaces(thread.id,{...thread.discovery.intent,area:''},'google',value);}
+        else notify('Location is ready. Tell me which business to call.');
+      }catch(e){notify(e instanceof Error?e.message:'Location search failed.');}
+      finally{setLocating(false);setTyping(null);}
+    },()=>{setLocating(false);notify('Location was not shared. You can type your city instead.');},{timeout:10000,maximumAge:300000});
   }
   async function findPlaces(
     id: string,
     intent: Intent,
     source: "google" | "web" = "google",
+    nearby=location,
   ) {
     setPlaceCount(3);
     if (!services.places && source === "google") throw new Error("Business search is temporarily unavailable. Please try again.");
@@ -472,25 +516,28 @@ export default function App() {
       query: intent.business.startsWith("https://")
         ? intent.business
         : `${intent.business} ${intent.area}`.trim(),
-      source,
+      source, area:intent.area||undefined, location:nearby||undefined,
     });
     if(result.places.length===1 && source==='google') {
       const selected=(await api('/places/'+encodeURIComponent(result.places[0].id))).place;
-      finishDiscovery(id,{intent,selected,mode:source});return;
+      await continueWithPlace(id,intent,selected);return;
+    }
+    if(result.needsLocation){
+      patchThread(id,t=>({...t,discovery:{intent,awaiting:'area'},messages:[...t.messages,message('assistant','Which city should I search in? You can also use your current location.')]}));return;
     }
     patchThread(id, (t) => ({
       ...t,
       title: intent.business,
       kind: intent.kind,
       status: "draft",
-      discovery: { intent, candidates: result.places, mode: source },
+      discovery: { intent, candidates: result.places, mode: source, awaiting: result.places.length ? undefined : "area" },
       messages: [
         ...t.messages,
         message(
           "assistant",
           result.places.length
-            ? "Choose the right location below."
-            : "I couldn’t find a match. Try another name or city, or search the web.",
+            ? `I found ${result.places.length} possible matches${intent.area ? ` in ${intent.area}` : " near you"}. Tap one, or tell me which you mean.`
+            : `I couldn’t find ${intent.business}${intent.area ? ` in ${intent.area}` : " nearby"}. Is it listed under another name, or in a nearby area?`,
         ),
       ],
     }));
@@ -510,11 +557,7 @@ export default function App() {
         );
         return;
       }
-      finishDiscovery(thread.id, {
-        ...thread.discovery,
-        selected,
-        candidates: undefined,
-      });
+      await continueWithPlace(thread.id,thread.discovery.intent,selected);
     } catch (e) {
       notify(e instanceof Error ? e.message : "Could not load this place.");
     } finally {
@@ -526,18 +569,22 @@ export default function App() {
     e?: FormEvent,
     override?: string,
     audioId?: string,
+    resumeThreadId?: string,
   ) {
     e?.preventDefault();
     const text = (override ?? draft).trim();
     if (!text || busy.current) return;
-    if (!session) { sessionStorage.setItem("pending-request",text); setDraft(text); setModal("auth"); return; }
+    if (!session) {
+      try{savePending({id:uid(),text,threadId:selected||uid(),created:Date.now()});}catch{notify('Keep this tab open while signing in so your request is preserved.');}
+      setDraft(text);setMobileChat(true);setModal('auth');return;
+    }
     if (!connected || !online) { notify("The assistant is offline. Your request is kept here; try again shortly."); return; }
     if (text.length > 2000) {
       notify("Please keep your message under 2,000 characters.");
       return;
     }
-    const id = selected || uid();
-    let current = thread;
+    const id = resumeThreadId || selected || uid();
+    let current = resumeThreadId ? data.threads.find(t=>t.id===resumeThreadId) : thread;
     if (!current) {
       current = {
         id,
@@ -557,7 +604,8 @@ export default function App() {
       messages: [...t.messages, { ...message("user", text), audioId }],
     }));
     setDraft("");
-    sessionStorage.removeItem("pending-request");
+    clearPending();
+    setMobileChat(true);
     setTyping(id);
     busy.current = true;
     try {
@@ -581,31 +629,25 @@ export default function App() {
         (current.status === "ready"
           ? { ...blankIntent(), ...current.plan, kind: current.kind }
           : blankIntent());
-      let intent = extractIntent(text, previous, current.discovery?.awaiting);
-      if (/^https:\/\//.test(text)) {
-        intent.business = text;
-      }
-      if (session) {
-        const result = await api("/prepare", {
-          text,
-          previous,
-          awaiting: current.discovery?.awaiting,
-          today: new Date().toLocaleDateString("en-CA"),
-          profileName: data.name,
-        });
-        intent = result.intent;
-      }
-      const chosen = current.discovery?.selected;
-      if (!intent.business) {
-        finishDiscovery(id, { intent });
-      } else if (
-        chosen &&
-        intent.business === previous.business &&
-        intent.area === previous.area
-      ) {
-        finishDiscovery(id, { intent, selected: chosen });
-      } else {
-        await findPlaces(id, intent);
+      const decision = await api('/prepare',{
+        text,previous,awaiting:current.discovery?.awaiting,
+        today:new Date().toLocaleDateString('en-CA'),profileName:data.name,...contextFor(current),
+      });
+      const intent:Intent=decision.intent;
+      const chosen=current.discovery?.selected;
+      if(decision.action==='select' && decision.selectedIndex!==null){
+        const candidate=current.discovery?.candidates?.[decision.selectedIndex];
+        if(!candidate)throw new Error('That result is no longer available. Tell me the business and city again.');
+        const place=(await api('/places/'+encodeURIComponent(candidate.id))).place;
+        await continueWithPlace(id,intent,place);
+      }else if(decision.action==='search'||(intent.area&&intent.area!==previous.area&&intent.business)){
+        // Remove stale options immediately while the corrected search is running.
+        patchThread(id,t=>({...t,discovery:{intent},status:'draft'}));
+        await findPlaces(id,intent);
+      }else if(chosen&&intent.business===previous.business&&intent.area===previous.area){
+        finishDiscovery(id,{intent,selected:chosen,awaiting:decision.awaiting||undefined},decision.reply);
+      }else{
+        patchThread(id,t=>({...t,status:'draft',title:intent.business||t.title,discovery:{...t.discovery,intent,awaiting:decision.awaiting||undefined},messages:[...t.messages,message('assistant',decision.reply)]}));
       }
     } catch (e) {
       const error =
@@ -660,6 +702,8 @@ export default function App() {
     setAuthBusy(true);
     setAuthMessage("");
     try {
+      const pending=readPending();
+      if(pending)savePending({...pending,email:email.trim().toLowerCase()});
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: window.location.origin },
@@ -1113,6 +1157,9 @@ export default function App() {
                       )}
                       {thread.discovery && thread.status === "draft" && (
                         <div className="discovery-panel">
+                          {(thread.discovery.awaiting==='area'||thread.discovery.candidates)&&(
+                            <button className="text-button" disabled={locating||!!typing} onClick={()=>void useLocation()}>{locating?'Finding your location…':'Use my location'}</button>
+                          )}
                           {thread.discovery.candidates && (
                             <>
                               <div className="discovery-heading">
@@ -1232,9 +1279,7 @@ export default function App() {
                           )}
                           {thread.discovery.awaiting && (
                             <>
-                              <p className="followup-question">
-                                {questions[thread.discovery.awaiting].text}
-                              </p>
+
                               <div className="quick-choices">
                                 {questions[
                                   thread.discovery.awaiting
@@ -1903,7 +1948,7 @@ export default function App() {
       {modal === "auth" && (
         <ModalFrame
           title="Your assistant. Everywhere."
-          subtitle="One email. No password. We’ll create your account if you’re new."
+          subtitle={readPending() ? "Your request is saved. Sign in and I’ll pick up where you left off." : "One email. No password. We’ll create your account if you’re new."}
           close={() => setModal(null)}
         >
           <div className="auth-avatar">
