@@ -2909,3 +2909,22 @@ html[data-keyboard="true"] .composer-area {
 html[data-keyboard="true"] .composer-caption {
   display: none;
 }
+
+/* Assistant home: familiar composer, compact account controls. */
+.home-header .chat-heading { min-width: 0; }
+.home-header .chat-heading h2 { max-width: none; }
+.home-header .chat-heading > span { display: none; }
+.home-header .chat-header-actions { gap: 6px; }
+.home-header .chat-header-actions > .home-profile { display: inline-flex; width: 36px; height: 40px; }
+.home-balance { border: 0; background: #f3f6fc; color: #41516a; border-radius: 16px; padding: 8px 10px; font-size: 12px; font-weight: 600; min-height: 36px; cursor: pointer; white-space: nowrap; }
+.home-header .home-menu { display: none; }
+.home-header + .chat-scroll .welcome { justify-content: flex-end; padding-top: 28px; padding-bottom: 30px; }
+.home-header + .chat-scroll .welcome-art { height: 100px; margin: 0 0 12px; transform: scale(.85); }
+.home-header + .chat-scroll .welcome h1 { font-size: 38px; }
+.home-header + .chat-scroll .suggestions { margin-top: 22px; margin-bottom: 18px; }
+@media (max-height: 740px) {
+  .home-header + .chat-scroll .welcome { padding-top: 12px; padding-bottom: 16px; }
+  .home-header + .chat-scroll .welcome-art { height: 68px; transform: scale(.65); margin-bottom: 8px; }
+  .home-header + .chat-scroll .welcome h1 { font-size: 32px; }
+  .home-header + .chat-scroll .suggestions { margin-top: 14px; margin-bottom: 10px; }
+}

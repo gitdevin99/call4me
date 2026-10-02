@@ -19,6 +19,8 @@ import {
   Download,
   Ellipsis,
   HelpCircle,
+  History,
+  Home,
   Info,
   LogOut,
   Mail,
@@ -203,8 +205,8 @@ function callResultMessages(messages: Thread['messages'], call: {id:string;statu
 export default function App() {
   const [data, setData] = useState<AppData>(readData);
   const [page, setPage] = useState<Page>("chats");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [mobileChat, setMobileChat] = useState(()=>Boolean(readPending()));
+  const [selected, setSelected] = useState<string | null>(() => data.threads.find(t => ["draft", "ready", "calling"].includes(t.status) || t.callOutcome === "needs_input")?.id ?? null);
+  const [mobileChat, setMobileChat] = useState(true);
   const [modal, setModal] = useState<Modal>(null);
   const [draft, setDraft] = useState(()=>readPending()?.text||sessionStorage.getItem("pending-request")||"");
   const [query, setQuery] = useState("");
@@ -336,7 +338,7 @@ export default function App() {
         if (row?.state?.version === 1 && Array.isArray(row.state.threads)) {
           setData({...row.state,balance:0,transactions:[],threads:row.state.threads.filter((t:Thread)=>!["olive","salon","garage"].includes(t.id))});
           setProfileName(row.state.name === "Alex" ? "" : row.state.name);
-          setSelected(row.state.threads[0]?.id ?? null);
+          setSelected(row.state.threads.find((t:Thread) => !["olive","salon","garage"].includes(t.id) && (["draft","ready","calling"].includes(t.status) || t.callOutcome === "needs_input"))?.id ?? null);
         } else {
           const fresh = emptyData();
           setData(fresh);
@@ -787,8 +789,7 @@ export default function App() {
           className="brand-icon"
           aria-label="Call for me home"
           onClick={() => {
-            setPage("chats");
-            setMobileChat(false);
+            newChat();
           }}
         >
           <Wave />
@@ -796,7 +797,7 @@ export default function App() {
         <div className="rail-nav">
           {(
             [
-              { id: "chats", icon: MessageCircle, label: "Chats" },
+              { id: "chats", icon: Home, label: "Home" },
               { id: "wallet", icon: Wallet, label: "Wallet" },
               { id: "profile", icon: UserRound, label: "Profile" },
             ] as const
@@ -808,7 +809,8 @@ export default function App() {
               className={`rail-button ${page === item.id ? "selected" : ""}`}
               onClick={() => {
                 setPage(item.id);
-                setMobileChat(false);
+                setMobileChat(item.id === "chats");
+                if (item.id === "chats" && thread && ["completed", "cancelled"].includes(thread.status) && thread.callOutcome !== "needs_input") setSelected(null);
               }}
             >
               <item.icon size={23} strokeWidth={1.8} />
@@ -884,7 +886,7 @@ export default function App() {
                   </div>
                   <div className="title-row">
                     <h1>
-                      Chats<span className="count">{data.threads.length}</span>
+                      History<span className="count">{data.threads.length}</span>
                     </h1>
                     <button
                       className="compose-button"
@@ -1009,17 +1011,17 @@ export default function App() {
                 </div>
               </section>
               <main className="chat-panel">
-                <header className="chat-header">
+                <header className={`chat-header ${!thread ? "home-header" : ""}`}>
                   <button
                     className="icon-button mobile-back"
-                    aria-label="Back to chats"
+                    aria-label="Call history"
                     onClick={() => setMobileChat(false)}
                   >
-                    <ArrowLeft size={23} />
+                    <History size={23} />
                   </button>
                   <Avatar />
                   <div className="chat-heading">
-                    <h2>{thread?.title || "Your calling assistant"}</h2>
+                    <h2>{thread?.title || "can you call."}</h2>
                     <span>
                       <i />
                       {thread?.status === "calling"
@@ -1028,6 +1030,10 @@ export default function App() {
                     </span>
                   </div>
                   <div className="chat-header-actions">
+                    {!thread && <>
+                      <button className="home-balance" aria-label={`Wallet, ${money(data.balance-reserved)} available`} onClick={() => setPage("wallet")}>{money(data.balance-reserved)}</button>
+                      <button className="home-profile icon-button" aria-label="Your profile" onClick={() => setPage("profile")}><UserRound size={20}/></button>
+                    </>}
                     <button
                       className="icon-button"
                       aria-label="Call details"
@@ -1037,7 +1043,7 @@ export default function App() {
                     >
                       <Info size={21} />
                     </button>
-                    <div className="menu-wrap">
+                    <div className={`menu-wrap ${!thread ? "home-menu" : ""}`}>
                       <button
                         className="icon-button"
                         aria-label="Conversation options"
@@ -1878,7 +1884,7 @@ export default function App() {
         >
           {(
             [
-              { id: "chats", icon: MessageCircle, label: "Chats" },
+              { id: "chats", icon: Home, label: "Home" },
               { id: "wallet", icon: Wallet, label: "Wallet" },
               { id: "profile", icon: UserRound, label: "Profile" },
             ] as const
@@ -1888,7 +1894,8 @@ export default function App() {
               className={page === item.id ? "selected" : ""}
               onClick={() => {
                 setPage(item.id);
-                setMobileChat(false);
+                setMobileChat(item.id === "chats");
+                if (item.id === "chats" && thread && ["completed", "cancelled"].includes(thread.status) && thread.callOutcome !== "needs_input") setSelected(null);
               }}
             >
               <item.icon size={23} />
