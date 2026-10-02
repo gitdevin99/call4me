@@ -125,9 +125,11 @@ app.use("/api", (_req, res) =>
 );
 const dist = fileURLToPath(new URL("../dist", import.meta.url));
 if (existsSync(dist)) {
-  app.use(express.static(dist, { maxAge: "1h" }));
+  app.use(express.static(dist, { maxAge: "1h", setHeaders(res,file) {
+    if(file.endsWith(".html")||file.endsWith("/sw.js"))res.setHeader("Cache-Control","no-cache, max-age=0, must-revalidate");
+  } }));
   app.get("/{*splat}", (_req, res) =>
-    res.sendFile(path.join(dist, "index.html")),
+    res.set("Cache-Control","no-cache, max-age=0, must-revalidate").sendFile(path.join(dist, "index.html")),
   );
 }
 app.use((error, _req, res, _next) =>
