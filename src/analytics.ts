@@ -15,7 +15,17 @@ export function initAnalytics() {
     autocapture: false,
     capture_pageview: false,
     capture_pageleave: false,
-    disable_session_recording: true,
+    disable_session_recording: false,
+    enable_recording_console_log: false,
+    session_recording: {
+      maskAllInputs: true,
+      maskTextSelector: '*',
+      blockSelector: '.message-row, .transcript, .profile-card, .call-card, .result-card, audio, video, input[type="hidden"], input[type="file"]',
+      recordCrossOriginIframes: false,
+      recordHeaders: false,
+      recordBody: false,
+      maskCapturedNetworkRequestFn: () => null,
+    },
     before_send: (event) => {
       if (!event) return event;
       // OAuth codes and payment redirect parameters must never enter analytics.
@@ -30,6 +40,7 @@ export function initAnalytics() {
     },
   });
   initialized = true;
+  posthog.startSessionRecording(true);
   posthog.capture('$pageview', { app_mode: window.matchMedia('(display-mode: standalone)').matches ? 'pwa' : 'browser' });
 }
 
