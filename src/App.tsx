@@ -92,21 +92,25 @@ const prompts = [
   {
     icon: Utensils,
     title: "Book a table",
-    text: "Book a table for two tomorrow evening.",
+    text: "Book a table.",
+    question: "Which restaurant? You can include the city, date, time, and number of people in one message.",
     kind: "restaurant",
   },
   {
     icon: Scissors,
     title: "Make an appointment",
-    text: "Help me book a salon appointment.",
-    kind: "salon",
+    text: "Make an appointment.",
+    question: "What kind of appointment, and where? Tell me any preferred days or times too.",
+    kind: "other",
   },
   {
     icon: Phone,
     title: "Ask a quick question",
     text: "Call a business and ask a question for me.",
+    question: "Who should I call, and what would you like to know? A business name and city, or a phone number, is enough.",
     kind: "other",
   },
+{ icon: UserRound, title: "Call someone", text: "Call a person for me.", question: "What’s their phone number, and what would you like me to say or ask? Include the country code.", kind: "other" },
 ] as const;
 const rate = 60;
 function Wave({
@@ -205,7 +209,7 @@ function callResultMessages(messages: Thread['messages'], call: {id:string;statu
 export default function App() {
   const [data, setData] = useState<AppData>(readData);
   const [page, setPage] = useState<Page>("chats");
-  const [selected, setSelected] = useState<string | null>(() => data.threads.find(t => ["draft", "ready", "calling"].includes(t.status) || t.callOutcome === "needs_input")?.id ?? null);
+  const [selected, setSelected] = useState<string | null>(() => data.threads.find(t => t.status === "calling")?.id ?? null);
   const [mobileChat, setMobileChat] = useState(true);
   const [modal, setModal] = useState<Modal>(null);
   const [draft, setDraft] = useState(()=>readPending()?.text||sessionStorage.getItem("pending-request")||"");
@@ -250,6 +254,7 @@ export default function App() {
     updateServiceWorker,
   } = useRegisterSW();
   const thread = data.threads.find((t) => t.id === selected);
+  const resumable = data.threads.find(t => ["draft", "ready"].includes(t.status) || t.callOutcome === "needs_input");
   const active = data.threads.find((t) => t.status === "calling");
   const profileInitial = (data.name.trim()[0] || session?.user.email?.trim()[0] || "").toLocaleUpperCase();
   const notify = (text: string) => setToast(text);
@@ -338,7 +343,7 @@ export default function App() {
         if (row?.state?.version === 1 && Array.isArray(row.state.threads)) {
           setData({...row.state,balance:0,transactions:[],threads:row.state.threads.filter((t:Thread)=>!["olive","salon","garage"].includes(t.id))});
           setProfileName(row.state.name === "Alex" ? "" : row.state.name);
-          setSelected(row.state.threads.find((t:Thread) => !["olive","salon","garage"].includes(t.id) && (["draft","ready","calling"].includes(t.status) || t.callOutcome === "needs_input"))?.id ?? null);
+          setSelected(row.state.threads.find((t:Thread) => !["olive","salon","garage"].includes(t.id) && t.status === "calling")?.id ?? null);
         } else {
           const fresh = emptyData();
           setData(fresh);
@@ -438,6 +443,14 @@ export default function App() {
     setPage("chats");
     setMobileChat(true);
     setDraft(prefill);
+    setTimeout(() => composer.current?.focus(), 40);
+  }
+  function startChoice(choice: typeof prompts[number]) {
+    const id = uid();
+    const intent = {...blankIntent(), kind: choice.kind, request: choice.text};
+    const created: Thread = {id, title: choice.title, kind: choice.kind, status: "draft", created: new Date().toISOString(), messages: [message("assistant", choice.question)], plan: {...emptyPlan(), request: choice.text}, discovery: {intent}, starter: choice.text};
+    setData(d => ({...d, threads: [created, ...d.threads]}));
+    setSelected(id); setMobileChat(true); setDraft("");
     setTimeout(() => composer.current?.focus(), 40);
   }
   function openPlan() {
@@ -596,7 +609,7 @@ export default function App() {
     const text = (override ?? draft).trim();
     if (!text || busy.current) return;
     if (!session) {
-      try{savePending({id:uid(),text,threadId:selected||uid(),created:Date.now()});}catch{notify('Keep this tab open while signing in so your request is preserved.');}
+      try{savePending({id:uid(),text:thread?.starter && !thread.messages.some(m=>m.role === "user") ? `${thread.starter} ${text}` : text,threadId:selected||uid(),created:Date.now()});}catch{notify('Keep this tab open while signing in so your request is preserved.');}
       setDraft(text);setMobileChat(true);setModal('auth');return;
     }
     if (!connected || !online) { notify("The assistant is offline. Your request is kept here; try again shortly."); return; }
@@ -810,7 +823,7 @@ export default function App() {
               onClick={() => {
                 setPage(item.id);
                 setMobileChat(item.id === "chats");
-                if (item.id === "chats" && thread && ["completed", "cancelled"].includes(thread.status) && thread.callOutcome !== "needs_input") setSelected(null);
+                if (item.id === "chats" && thread?.status !== "calling") setSelected(null);
               }}
             >
               <item.icon size={23} strokeWidth={1.8} />
@@ -1106,9 +1119,9 @@ export default function App() {
                         YOUR EVERYDAY CALLS, TAKEN CARE OF
                       </span>
                       <h1>
-                        Consider it
+                        What can I
                         <br />
-                        <span>off your list.</span>
+                        <span>call about?</span>
                       </h1>
                       <p>
                         Tell me who to call and what you need.
@@ -1120,8 +1133,7 @@ export default function App() {
                           <button
                             key={p.title}
                             onClick={() => {
-                              setDraft(p.text);
-                              composer.current?.focus();
+                              startChoice(p);
                             }}
                           >
                             <p.icon size={20} />
@@ -1130,6 +1142,7 @@ export default function App() {
                           </button>
                         ))}
                       </div>
+                      {resumable && <button className="resume-request" onClick={() => selectChat(resumable.id)}>Continue your last request <ArrowRight size={15}/></button>}
                       <span className="welcome-note">
                         <ShieldCheck size={14} /> You approve the details before
                         every call.
@@ -1895,7 +1908,7 @@ export default function App() {
               onClick={() => {
                 setPage(item.id);
                 setMobileChat(item.id === "chats");
-                if (item.id === "chats" && thread && ["completed", "cancelled"].includes(thread.status) && thread.callOutcome !== "needs_input") setSelected(null);
+                if (item.id === "chats" && thread?.status !== "calling") setSelected(null);
               }}
             >
               <item.icon size={23} />

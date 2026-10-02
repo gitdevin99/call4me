@@ -16,6 +16,7 @@ export type Plan = {
   limit: number;
 };
 export type Thread = {
+  starter?: string;
   id: string;
   title: string;
   kind: Kind;

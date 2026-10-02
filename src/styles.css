@@ -2918,7 +2918,7 @@ html[data-keyboard="true"] .composer-caption {
 .home-header .chat-header-actions > .home-profile { display: inline-flex; width: 36px; height: 40px; }
 .home-balance { border: 0; background: #f3f6fc; color: #41516a; border-radius: 16px; padding: 8px 10px; font-size: 12px; font-weight: 600; min-height: 36px; cursor: pointer; white-space: nowrap; }
 .home-header .home-menu { display: none; }
-.home-header + .chat-scroll .welcome { justify-content: flex-end; padding-top: 28px; padding-bottom: 30px; }
+.home-header + .chat-scroll .welcome { justify-content: center; padding-top: 28px; padding-bottom: 30px; }
 .home-header + .chat-scroll .welcome-art { height: 100px; margin: 0 0 12px; transform: scale(.85); }
 .home-header + .chat-scroll .welcome h1 { font-size: 38px; }
 .home-header + .chat-scroll .suggestions { margin-top: 22px; margin-bottom: 18px; }
@@ -2928,3 +2928,5 @@ html[data-keyboard="true"] .composer-caption {
   .home-header + .chat-scroll .welcome h1 { font-size: 32px; }
   .home-header + .chat-scroll .suggestions { margin-top: 14px; margin-bottom: 10px; }
 }
+
+.resume-request { display: flex; align-items: center; gap: 8px; border: 0; background: none; color: #1673ed; font-size: 12px; padding: 8px; margin-bottom: 10px; cursor: pointer; }
