@@ -1,5 +1,6 @@
 import {GoogleSignIn,googleSignInConfigured} from './GoogleSignIn';
 import {readPending,savePending,clearPending} from './pending';
+import { identifyAnalytics, trackEvent } from './analytics';
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -313,6 +314,8 @@ export default function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, s) => {
       if (authUser.current !== (s?.user.id || null)) {
+        identifyAnalytics(s?.user.id || null);
+        if (event === 'SIGNED_IN' && s) trackEvent('sign_in_completed');
         setSyncReady(false);
         authUser.current = s?.user.id || null;
       }
@@ -324,6 +327,7 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+  useEffect(() => { identifyAnalytics(session?.user.id || null); }, [session?.user.id]);
   useEffect(() => {
     if (!session || !supabase) return;
     let cancelled = false;
@@ -479,7 +483,7 @@ export default function App() {
   async function reloadCredit(){
     if(!session){setModal('auth');return;}
     setCreditBusy(true);
-    try {const result=await liveApi('/checkout',{cents:amount});window.location.assign(result.url);}
+    try {const result=await liveApi('/checkout',{cents:amount});trackEvent('checkout_opened',{amount_cents:amount});window.location.assign(result.url);}
     catch(e){notify(e instanceof Error?e.message:'Checkout unavailable.');}
     finally{setCreditBusy(false);}
   }
@@ -641,6 +645,7 @@ export default function App() {
     }));
     setDraft("");
     clearPending();
+    trackEvent('request_submitted', { input_mode: audioId ? 'voice_note' : 'text' });
     setMobileChat(true);
     setTyping(id);
     busy.current = true;
@@ -724,6 +729,7 @@ export default function App() {
     try{
       const destinationPhone=thread.discovery?.mode==='direct'?thread.discovery.intent.phone:undefined;
       const {call}=await liveApi('/calls',{threadId:thread.id,...(destinationPhone?{destinationPhone}:{placeId:thread.discovery?.selected?.id||thread.discovery?.placeId}),caller:quoteData.caller.phone,quotedRate:quoteData.rate,limit:thread.plan.limit,plan:thread.plan});
+      trackEvent('call_started', { destination_type: destinationPhone ? 'direct_number' : 'business', limit_usd: thread.plan.limit });
       patchThread(thread.id,t=>({...t,status:'calling',callId:call.id,caller:call.caller,callStatus:call.status,started:Date.parse(call.created_at)}));setModal(null);
     }catch(e){notify(e instanceof Error?e.message:'Could not place the call.');}
     finally{setCallBusy(false);}

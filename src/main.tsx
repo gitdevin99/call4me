@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import { installAppViewport } from './viewport';
+import { initAnalytics } from './analytics';
+initAnalytics();
 const removeViewportListeners = installAppViewport();
 if (import.meta.hot) import.meta.hot.dispose(removeViewportListeners);
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
