@@ -21,6 +21,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "standardwebhooks": "^1.1.1",
+    "supermemory": "^4.25.4",
     "twilio": "^6.1.2",
     "ws": "^8.22.0",
     "zod": "^4.1.0"

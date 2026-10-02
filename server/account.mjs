@@ -1,3 +1,5 @@
+import {recall,memoryProfile,updateMemory,remember,memoryConfigured} from './memory.mjs';
+import {randomUUID} from 'node:crypto';
 import {Router} from 'express';
 import {z} from 'zod';
 import {rateLimit} from 'express-rate-limit';
@@ -10,6 +12,13 @@ export function accountRouter(supabase){
  const r=Router();
  r.use(rateLimit({windowMs:60000,limit:120,standardHeaders:'draft-8',legacyHeaders:false}));
  r.use(async(req,res,next)=>{try{const token=req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];if(!token||!supabase)return res.status(401).json({error:'Sign in to continue.'});const {data,error}=await supabase.auth.getUser(token);if(error||!data.user)return res.status(401).json({error:'Please sign in again.'});req.user=data.user;next();}catch{res.status(503).json({error:'Authentication is unavailable.'});}});
+ r.get('/memory',wrap(async(req,res)=>res.json(await memoryProfile(req.user.id))));
+ r.post('/memory',wrap(async(req,res)=>{
+  if(!memoryConfigured())return res.status(503).json({error:'Memory is not connected yet.'});
+  const input=z.object({enabled:z.boolean().optional(),reset:z.boolean().optional(),correction:z.string().min(1).max(2000).optional()}).parse(req.body);
+  if(input.correction){const saved=await remember(req.user.id,randomUUID(),JSON.stringify({date:new Date().toISOString(),user:input.correction}),input.correction);if(!saved)throw new Error('Enable memory before saving a detail.');return res.json({saved:true});}
+  res.json(await updateMemory(req.user.id,input));
+ }));
  r.get('/number-countries',wrap(async(req,res)=>res.json({countries:await availableCountries()})));
  r.get('/numbers',wrap(async(req,res)=>res.json({numbers:await ownedNumbers()})));
  r.get('/numbers/:country',wrap(async(req,res)=>res.json(await numberCatalog(req.params.country))));
@@ -22,6 +31,8 @@ export function accountRouter(supabase){
  r.post('/quote',wrap(async(req,res)=>{const p=z.object({placeId:z.string().max(200).optional(),destinationPhone:z.string().max(30).optional(),caller:z.string().optional()}).parse(req.body);res.json(await quote(p));}));
  r.post('/calls',wrap(async(req,res)=>{
   const p=z.object({threadId:z.uuid(),placeId:z.string().max(200).optional(),destinationPhone:z.string().max(30).optional(),caller:z.string(),quotedRate:z.number().int().min(1),limit:z.number().int().min(100).max(1000),plan:z.object({business:z.string().max(200),request:z.string().min(1).max(6000),name:z.string().max(100),date:z.string().max(30),time:z.string().max(30),guests:z.string().max(10)})}).parse(req.body);
+  const memory=await recall(req.user.id,p.plan.request);
+  p.plan._memory=memory.context;
   res.json({call:await placeCall(req.user.id,p)});
  }));
  r.get('/calls/:id',wrap(async(req,res)=>{

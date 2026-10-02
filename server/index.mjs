@@ -1,3 +1,4 @@
+import {startMemoryWorker,memoryConfigured} from './memory.mjs';
 import {createServer} from 'node:http';
 import {accountRouter} from './account.mjs';
 import {whopWebhook,paymentsReady,startPaymentReconciliation} from './billing.mjs';
@@ -39,6 +40,7 @@ const supabase =
 app.get("/api/health", (_req, res) =>
   res.json({
     ok: true,
+    memory: memoryConfigured(),
     chat: Boolean(aiConfigured() && supabase),
     chatModel: aiConfigured() ? aiConfig().model : null,
     auth: Boolean(supabase),
@@ -138,6 +140,7 @@ const server=createServer(app);
 attachVoice(server);
 startCallReconciliation();
 startOutcomeReview();
+startMemoryWorker();
 startPaymentReconciliation();
 server.listen(Number(process.env.PORT) || 3001, host, () =>
   console.log(

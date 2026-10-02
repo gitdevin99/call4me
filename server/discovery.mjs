@@ -1,3 +1,5 @@
+import {recall,remember,rememberedPhone,memoryInstruction} from './memory.mjs';
+import {createHash} from 'node:crypto';
 import {insideBounds} from './geography.mjs';
 import {intentSchema,assistantSchema,conversationPrompt} from './conversation.mjs';
 import { aiConfigured, aiConfig, chatOptions, transcribeAudio } from "./ai.mjs";
@@ -77,6 +79,7 @@ export function discoveryRouter(supabase) {
       const { data, error } = await supabase.auth.getUser(token);
       if (error || !data.user)
         return res.status(401).json({ error: "Please sign in again." });
+      req.user=data.user;
       next();
     } catch {
       res.status(503).json({ error: "Sign-in verification is unavailable." });
@@ -198,6 +201,7 @@ export function discoveryRouter(supabase) {
         .json({ error: "AI understanding is not connected." });
     const parsed = z
       .object({
+        threadId: z.uuid().optional(),
         text: z.string().min(1).max(2000),
         previous: intentSchema,
         awaiting: z.string().max(20).optional(),
@@ -214,6 +218,7 @@ export function discoveryRouter(supabase) {
     if (!parsed.success)
       return res.status(400).json({ error: "Invalid request." });
     try {
+      const memory=await recall(req.user.id,parsed.data.text);
       const result = await jsonFetch(aiConfig().url, {
         method: "POST",
         headers: {
@@ -226,9 +231,9 @@ export function discoveryRouter(supabase) {
           messages: [
             {
               role: "system",
-              content: conversationPrompt,
+              content: conversationPrompt+"\n"+memoryInstruction,
             },
-            { role: "user", content: JSON.stringify(parsed.data) },
+            { role: "user", content: JSON.stringify({...parsed.data,savedMemory:memory.context}) },
           ],
           ...chatOptions(1200),
         }),
@@ -236,11 +241,11 @@ export function discoveryRouter(supabase) {
       const decision = assistantSchema.parse(
         JSON.parse(result.choices?.[0]?.message?.content),
       );
-      // A direct destination must come from the customer's own message, never
-      // from a model guess or a business-search result.
+      // A direct destination must have been supplied by this customer, now or
+      // in persisted memory, never invented by the model.
       const statedNumber=findPhoneNumbersInText(parsed.data.text).find(n=>n.number.isValid())?.number.number;
       if(statedNumber)decision.intent.phone=statedNumber;
-      else if(decision.intent.phone!==parsed.data.previous.phone)decision.intent.phone='';
+      else if(decision.intent.phone!==parsed.data.previous.phone && !(await rememberedPhone(req.user.id,decision.intent.phone)))decision.intent.phone='';
       if(decision.intent.phone){decision.action='reply';decision.awaiting=null;decision.selectedIndex=null;}
       else if(/(?:\d[ .()-]?){9,}\d/.test(parsed.data.text)){
         decision.action='ask';decision.awaiting='business';decision.selectedIndex=null;
@@ -255,6 +260,8 @@ export function discoveryRouter(supabase) {
         decision.action='ask';decision.awaiting='area';
         decision.reply=`Which city is ${decision.intent.business || 'the business'} in? You can type it or use your current location.`;
       }
+      const eventId=createHash('sha256').update(JSON.stringify(parsed.data)).digest('hex');
+      await remember(req.user.id,eventId,JSON.stringify({date:new Date().toISOString(),threadId:parsed.data.threadId,user:parsed.data.text,assistant:decision.reply}),parsed.data.text);
       res.json(decision);
     } catch {
       res.status(502).json({

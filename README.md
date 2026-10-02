@@ -28,3 +28,21 @@ Whop endpoint: `https://canyoucall.app/api/webhooks/whop`. Events: `payment.succ
 Health flags indicate configured/enabled services, not end-to-end success. Verify email delivery, a paid reload, and an authorized phone call before declaring launch readiness. Test callbacks are not real payments. No call is made automatically by deployment.
 
 The active voice runtime uses Twilio. The legacy Telnyx adapter is not wired into live billing. Human takeover, listen-in, automatic phone-menu navigation, and purchasing numbers in the app are not implemented. A provider timeout during dialing keeps the credit reservation pending to avoid duplicate calls; unresolved cases require operator reconciliation.
+
+### Persistent memory
+
+Supermemory uses the server-only `SUPERMEMORY_API_KEY`. Apply
+`supabase/migrations/20261002_memory.sql` with the database administrator before
+deploying; the runtime role only reads/writes the new memory tables.
+Each verified Supabase user has a separate, server-derived container tag. New
+chat exchanges and reviewed call outcomes enter a durable retry queue. Retrieval
+combines the profile, relevant memories, and recent saved exchanges; provider
+failures do not prevent ordinary chat. No automatic historical backfill occurs.
+Profile lets users view, correct, pause, or clear memory. Clearing rotates its
+namespace immediately, removes local memory events, and queues old-container
+deletion. Original chats and financial/call records remain separate.
+
+Run `npm test` for unit checks. `node --env-file=.env scripts/verify-memory.mjs`
+is an opt-in provider/database check requiring an admin database password. It
+creates and removes two synthetic test users, verifies fresh-chat contact recall,
+isolation, pause and reset, and never places a phone call.

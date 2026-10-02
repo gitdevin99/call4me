@@ -241,6 +241,9 @@ export default function App() {
   const [placeCount, setPlaceCount] = useState(3);
   const [tick, setTick] = useState(Date.now());
   const [menu, setMenu] = useState(false);
+  const [memoryInfo,setMemoryInfo]=useState<{enabled:boolean;configured:boolean;facts:string[]}|null>(null);
+  const [memoryBusy,setMemoryBusy]=useState(false);
+  const [memoryCorrection,setMemoryCorrection]=useState('');
   const [profileName, setProfileName] = useState(data.name);
   const [storageError, setStorageError] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
@@ -480,6 +483,13 @@ export default function App() {
     const r=await fetch('/api/live'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(session?{Authorization:`Bearer ${session.access_token}`}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(30000)});
     const result=await r.json();if(!r.ok)throw new Error(result.error||'Please try again.');return result;
   }
+  useEffect(()=>{setMemoryInfo(null);setMemoryCorrection('');},[session?.user.id]);
+  async function loadMemory(){
+    setMemoryBusy(true);try{setMemoryInfo(await liveApi('/memory'));}catch(e){notify(e instanceof Error?e.message:'Could not load memory.');}finally{setMemoryBusy(false);}
+  }
+  async function changeMemory(body:unknown){
+    setMemoryBusy(true);try{await liveApi('/memory',body);setMemoryCorrection('');notify('Memory updated. New details may take a moment to appear.');setMemoryInfo(await liveApi('/memory'));}catch(e){notify(e instanceof Error?e.message:'Could not update memory.');}finally{setMemoryBusy(false);}
+  }
   async function reloadCredit(){
     if(!session){setModal('auth');return;}
     setCreditBusy(true);
@@ -510,6 +520,7 @@ export default function App() {
   }
   function contextFor(current?:Thread|null) {
     return {
+      threadId:current?.id,
       history:(current?.messages||[]).slice(-20).map(m=>({role:m.role,text:m.text.slice(0,2000)})),
       candidates:(current?.discovery?.candidates||[]).slice(0,10).map(p=>({id:p.id,name:p.name,address:p.address})),
       ...(current?.discovery?.selected?{selected:{id:current.discovery.selected.id,name:current.discovery.selected.name,address:current.discovery.selected.address}}:{}),
@@ -1807,6 +1818,23 @@ export default function App() {
                       Save details <Check size={16} />
                     </button>
                   </form>
+                  {session && <section className="memory-panel" style={{marginTop:28}}>
+                    <h3>What I remember</h3>
+                    <p>Preferences, people and past requests, remembered across chats with Supermemory.</p>
+                    <button className="secondary" disabled={memoryBusy} onClick={()=>void loadMemory()}>{memoryBusy?'Loading…':'View memory'}</button>
+                    {memoryInfo && <>
+                      <p>{!memoryInfo.configured?'Memory is not connected yet.':memoryInfo.enabled?'Memory is on. You can also correct details in chat.':'Memory is paused. Saved details are not used.'}</p>
+                      {memoryInfo.facts.length>0?<ul>{memoryInfo.facts.map((fact,i)=><li key={i}>{fact}</li>)}</ul>:<p>No processed memories to show yet.</p>}
+                      {memoryInfo.configured && <>
+                        <button className="secondary" disabled={memoryBusy} onClick={()=>void changeMemory({enabled:!memoryInfo.enabled})}>{memoryInfo.enabled?'Pause memory':'Enable memory'}</button>
+                        {memoryInfo.enabled && <form onSubmit={e=>{e.preventDefault();if(memoryCorrection.trim())void changeMemory({correction:memoryCorrection.trim()});}}>
+                          <label>Add or correct a detail<input value={memoryCorrection} onChange={e=>setMemoryCorrection(e.target.value)} maxLength={2000} placeholder="I prefer to be called Alex" /></label>
+                          <button className="secondary" disabled={memoryBusy||!memoryCorrection.trim()}>Save to memory</button>
+                        </form>}
+                        <button className="secondary" disabled={memoryBusy} onClick={()=>{if(window.confirm('Clear saved memory? Your chats, calls and balance stay in your account.'))void changeMemory({reset:true});}}>Clear saved memory</button>
+                      </>}
+                    </>}
+                  </section>}
                 </section>
                 <section className="profile-settings">
                   <h2>Account & preferences</h2>

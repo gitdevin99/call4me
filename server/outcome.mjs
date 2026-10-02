@@ -1,3 +1,4 @@
+import {remember,memoryConfigured} from './memory.mjs';
 import {aiConfig,chatOptions} from './ai.mjs';
 import {db,dbConfigured} from './db.mjs';
 
@@ -55,10 +56,11 @@ export function startOutcomeReview() {
   if(running||!dbConfigured()||!aiConfig().key)return;
   running=true;
   try{
-   const rows=(await db().query("select id,plan,summary,transcript from callapp.calls where status='completed' and ended_at is not null and coalesce(plan->'_outcome'->>'reviewVersion','')<>$1 order by ended_at desc limit 5",[reviewVersion])).rows;
+   const rows=(await db().query("select id,user_id,created_at,plan,summary,transcript from callapp.calls where status='completed' and ended_at is not null and coalesce(plan->'_outcome'->>'reviewVersion','')<>$1 order by ended_at desc limit 5",[reviewVersion])).rows;
    for(const row of rows){
     let result;
     try{result=await reviewCall(row);}catch(e){console.error('Call review unavailable',row.id,e.message);result=normalizeReview({status:'unconfirmed',summary:'The call ended, but its result could not be verified.',next_step:'Review the transcript and ask for another call if needed.'},row);}
+    if(memoryConfigured())await remember(row.user_id,`call:${row.id}:${reviewVersion}`,JSON.stringify({date:row.created_at,source:'completed_call',request:row.plan?.request,business:row.plan?.business,outcome:result,transcript:row.transcript}));
     await db().query("update callapp.calls set summary=$2,plan=jsonb_set(plan,'{_outcome}',$3::jsonb,true) where id=$1 and coalesce(plan->'_outcome'->>'reviewVersion','')<>$4",[row.id,result.summary,JSON.stringify(result),reviewVersion]);
    }
   }catch(e){console.error('Call review pending',e.message);}finally{running=false;}
