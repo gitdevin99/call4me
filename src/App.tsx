@@ -1,6 +1,7 @@
 import {GoogleSignIn,googleSignInConfigured} from './GoogleSignIn';
 import {readPending,savePending,clearPending} from './pending';
 import { identifyAnalytics, trackEvent } from './analytics';
+import { trackMetaCheckout } from './meta';
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -493,7 +494,7 @@ export default function App() {
   async function reloadCredit(){
     if(!session){setModal('auth');return;}
     setCreditBusy(true);
-    try {const result=await liveApi('/checkout',{cents:amount});trackEvent('checkout_opened',{amount_cents:amount});window.location.assign(result.url);}
+    try {const result=await liveApi('/checkout',{cents:amount});trackEvent('checkout_opened',{amount_cents:amount});trackMetaCheckout(amount);window.location.assign(result.url);}
     catch(e){notify(e instanceof Error?e.message:'Checkout unavailable.');}
     finally{setCreditBusy(false);}
   }
