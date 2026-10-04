@@ -14,6 +14,7 @@ export function Pip({ mood = 'welcome', size = 'small' }: { mood?: PipMood; size
   const image = mood === 'happy' ? 'happy' : mood === 'welcome' ? 'welcome' : 'attentive';
   return <span className={`pip pip-${size} pip-${mood}`} aria-hidden="true">
     <span className="pip-halo"/>
+    {size === 'hero' && <span className="pip-shadow"/>}
     <img src={`/characters/pip-${image}.png`} alt="" width="256" height="256" decoding="async"/>
     {mood === 'calling' && <span className="pip-sound"><i/><i/><i/></span>}
   </span>;
