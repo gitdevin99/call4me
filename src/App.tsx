@@ -1,3 +1,6 @@
+import { MuseHome, CallJourney } from './MuseExperience';
+import { Pip, pipMood } from './Pip';
+import './muse.css';
 import {GoogleSignIn,googleSignInConfigured} from './GoogleSignIn';
 import {readPending,savePending,clearPending} from './pending';
 import { identifyAnalytics, trackEvent } from './analytics';
@@ -114,6 +117,12 @@ const prompts = [
   },
 { icon: UserRound, title: "Call someone", text: "Call a person for me.", question: "What’s their phone number, and what would you like me to say or ask? Include the country code.", kind: "other" },
 ] as const;
+const museExperience = new URLSearchParams(window.location.search).get("experience") !== "classic";
+const supportChoice = {
+  title: "Customer support", text: "Call customer support for me.",
+  question: "Which company should I call, and what do you need resolved? Include an order or account reference if it’s relevant.",
+  kind: "other" as Kind,
+};
 const rate = 60;
 function Wave({
   small = false,
@@ -453,7 +462,7 @@ export default function App() {
     setDraft(prefill);
     setTimeout(() => composer.current?.focus(), 40);
   }
-  function startChoice(choice: typeof prompts[number]) {
+  function startChoice(choice: { title: string; text: string; question: string; kind: Kind }) {
     const id = uid();
     const intent = {...blankIntent(), kind: choice.kind, request: choice.text};
     const created: Thread = {id, title: choice.title, kind: choice.kind, status: "draft", created: new Date().toISOString(), messages: [message("assistant", choice.question)], plan: {...emptyPlan(), request: choice.text}, discovery: {intent}, starter: choice.text};
@@ -814,7 +823,7 @@ export default function App() {
   const completed = data.threads.filter((t) => t.status === "completed").length;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${museExperience ? "muse-shell" : ""}`}>
       <aside className="rail">
         <button
           className="brand-icon"
@@ -1050,9 +1059,9 @@ export default function App() {
                   >
                     <History size={23} />
                   </button>
-                  <Avatar />
+                  {museExperience ? <Pip mood={pipMood(thread, typing === thread?.id)}/> : <Avatar />}
                   <div className="chat-heading">
-                    <h2>{thread?.title || "can you call."}</h2>
+                    <h2>{thread?.title || (museExperience ? "Pip · can you call." : "can you call.")}</h2>
                     <span>
                       <i />
                       {thread?.status === "calling"
@@ -1122,7 +1131,7 @@ export default function App() {
                 </header>
                 <div className="chat-scroll">
                   {!thread ? (
-                    <div className="welcome">
+                    museExperience ? <MuseHome name={data.name || (typeof session?.user.user_metadata?.full_name === "string" ? session.user.user_metadata.full_name : "")} threads={data.threads} onChoice={index => startChoice(index === 2 ? supportChoice : prompts[index])} onOpen={selectChat}/> : <div className="welcome">
                       <div className="welcome-art">
                         <span className="orbit one" />
                         <span className="orbit two" />
@@ -1192,6 +1201,7 @@ export default function App() {
                         </span>
                         <span className="intro-rule" />
                       </div>
+                      {museExperience && <CallJourney thread={thread}/>}
                       {thread.messages.map((m, i) => (
                         <div key={m.id} className={`message-row ${m.role}`}>
                           <div

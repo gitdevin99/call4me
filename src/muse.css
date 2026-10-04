@@ -1,0 +1,95 @@
+/* Opt-in companion experience. The existing viewport and call controls remain shared. */
+.muse-shell { --ink: #18262c; --muted: #6d797e; --line: #e9edf0; --blue: #177bc1; --soft: #f4f6f6; }
+.muse-shell .chat-panel { background: #fcfcfb; }
+.muse-shell .chat-header { background: #fcfcfb; border-bottom-color: #eef0ee; }
+.muse-shell .assistant-avatar { background: #dceef8; box-shadow: none; color: #177bc1; border-radius: 15px; }
+.muse-shell .assistant-avatar .wave i { background: #177bc1; }
+.muse-shell .home-balance { background: #edf2f3; color: #37525f; }
+.muse-shell .chat-heading h2 { color: #18262c; }
+.muse-home { padding: 35px 24px 20px; max-width: 480px; margin: auto; animation: muse-enter .35s ease-out both; }
+.muse-intro { padding: 0 4px; }
+.muse-companion { position: relative; display: grid; place-items: center; width: 74px; height: 74px; border-radius: 24px; color: #177bc1; background: #e3f1fa; margin: 0 0 25px; transform: rotate(-5deg); }
+.muse-companion > span { position: absolute; right: -3px; bottom: 0; display: grid; place-items: center; width: 23px; height: 23px; border: 3px solid #fcfcfb; border-radius: 50%; background: #d9eddf; color: #38795c; }
+.muse-greeting { color: #62727a; font-size: 13px; margin-bottom: 11px; }
+.muse-home h1 { font-size: 40px; font-weight: 550; line-height: 1.12; letter-spacing: -1.9px; color: #18262c; }
+.muse-home h1 span { color: #607e90; }
+.muse-subtitle { color: #6d797e; font-size: 14px; line-height: 1.7; margin-top: 17px; }
+.muse-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 26px 0 22px; }
+.muse-shortcuts button { position: relative; display: flex; flex-direction: column; align-items: flex-start; text-align: left; padding: 17px 13px; border-radius: 19px; background: #edf5f9; min-width: 0; min-height: 114px; color: #3c647d; animation: muse-enter .4s ease-out both; }
+.muse-shortcuts button:nth-child(2) { background: #f1eff8; color: #676382; animation-delay: .04s; }
+.muse-shortcuts button:nth-child(3) { background: #f4f2ec; color: #79725d; animation-delay: .08s; }
+.muse-shortcuts button:nth-child(4) { background: #edf5ef; color: #5a7967; animation-delay: .12s; }
+.muse-shortcuts button > strong { color: #243038; font-size: 13px; font-weight: 600; margin-top: 13px; }
+.muse-shortcuts button > span { font-size: 10px; margin-top: 5px; line-height: 1.4; }
+.muse-shortcuts button > svg:last-child { position: absolute; top: 18px; right: 13px; opacity: .65; transition: transform .18s; }
+.muse-shortcuts button:hover { filter: brightness(.975); }
+.muse-shortcuts button:hover > svg:last-child { transform: translate(2px, -2px); }
+.muse-recent h2 { color: #63747c; font-size: 12px; font-weight: 500; margin-bottom: 4px; }
+.muse-recent button { display: flex; gap: 12px; align-items: center; padding: 13px 0; width: 100%; text-align: left; border-bottom: 1px solid #edf0ef; }
+.muse-recent button > span:nth-child(2) { flex: 1; min-width: 0; }
+.muse-recent button strong { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.muse-recent button small { display: block; color: #6d797e; font-size: 10px; margin-top: 4px; }
+.muse-recent button > svg { color: #8f9da4; }
+.muse-recent-icon { display: grid; place-items: center; width: 35px; height: 35px; border-radius: 12px; background: #edf3f6; color: #6d8a9b; flex-shrink: 0; }
+.muse-recent-icon.finished { background: #e5f2e9; color: #38795c; }
+.muse-how { display: flex; gap: 9px; align-items: center; justify-content: center; color: #708088; font-size: 10px; padding: 5px 0; }
+.muse-how > svg { color: #a2adb2; }
+.muse-assurance { display: flex; justify-content: center; gap: 6px; align-items: center; font-size: 10px; color: #74848c; margin-top: 20px; }
+.muse-shell .composer { background: #fff; border-color: #e4eaed; box-shadow: 0 2px 12px #18262c04; border-radius: 27px; }
+.muse-shell .composer-area { background: #fcfcfb; }
+.muse-shell .voice-mic-button, .muse-shell .send-button { background: #c8e7fa; color: #17638e; box-shadow: none; }
+.muse-shell .assistant .bubble { background: #f0f3f3; color: #37454c; }
+.muse-shell .user .bubble { background: #dceef9; color: #213c4c; box-shadow: none; }
+.muse-shell .place-card { border-color: #e6ecee; border-radius: 20px; }
+.muse-journey { border-radius: 19px; background: #f0f5f7; margin: -5px 0 22px; overflow: hidden; }
+.muse-journey summary { display: flex; gap: 12px; align-items: center; padding: 15px; cursor: pointer; list-style: none; }
+.muse-journey summary::-webkit-details-marker { display: none; }
+.muse-journey summary > span:nth-child(2) { flex: 1; min-width: 0; }
+.muse-journey summary small { display: block; font-size: 8px; letter-spacing: 1.3px; color: #708690; margin-bottom: 4px; }
+.muse-journey summary strong { display: block; font-weight: 550; color: #304c5a; font-size: 13px; }
+.muse-journey summary > svg { color: #79909c; transition: transform .2s; }
+.muse-journey[open] summary > svg { transform: rotate(90deg); }
+.muse-journey-mark { width: 34px; height: 34px; border-radius: 12px; display: grid; place-items: center; background: #dfedf4; color: #527c96; }
+.muse-journey ol { list-style: none; padding: 0 18px 18px; margin: 0; animation: muse-enter .2s ease-out; }
+.muse-journey li { display: flex; gap: 12px; align-items: flex-start; padding: 11px 0 0; }
+.muse-journey li > span { display: grid; place-items: center; width: 21px; height: 21px; flex-shrink: 0; color: #94a5ae; }
+.muse-journey li[data-state="done"] > span { color: #3e8a65; }
+.muse-journey li[data-state="current"] > span { color: #177bc1; }
+.muse-journey li strong { font-size: 12px; font-weight: 550; color: #435966; }
+.muse-journey li p { font-size: 11px; color: #6d808a; line-height: 1.5; margin-top: 2px; overflow-wrap: anywhere; }
+.muse-journey li[data-state="current"] > span > .lucide-loader-circle { animation: muse-spin 1.5s linear infinite; }
+@keyframes muse-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes muse-spin { to { transform: rotate(360deg); } }
+@media(max-height: 740px) { .muse-home { padding-top: 20px; } .muse-companion { width: 55px; height: 55px; border-radius: 18px; margin-bottom: 17px; } .muse-companion > svg { width: 30px; } .muse-home h1 { font-size: 34px; } .muse-shortcuts { margin-top: 20px; } .muse-shortcuts button { min-height: 102px; padding-top: 13px; } }
+@media(max-width: 360px) { .muse-home { padding-inline: 18px; } .muse-home h1 { font-size: 35px; } .muse-shortcuts button > strong { font-size: 12px; } .muse-assurance { font-size: 9px; } }
+@media(prefers-reduced-motion: reduce) { .muse-home, .muse-shortcuts button, .muse-journey ol, .muse-journey li[data-state="current"] > span > .lucide-loader-circle { animation: none; } .muse-shortcuts button > svg, .muse-journey summary > svg { transition: none; } }
+
+/* Pip is the same companion at home, in chat, and through the call plan. */
+.pip { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 48px; height: 48px; isolation: isolate; }
+.pip img { width: 100%; height: 100%; object-fit: contain; position: relative; z-index: 1; }
+.pip-halo { position: absolute; z-index: 0; width: 78%; height: 78%; border-radius: 50%; background: #e9f3fa; }
+.pip-hero { width: 170px; height: 170px; }
+.pip-hero .pip-halo { background: #e4f0fa; width: 86%; height: 86%; }
+.pip-greeting { display: block; margin: -12px auto 8px; padding: 0; border-radius: 50%; transition: transform .2s; }
+.pip-greeting:hover { transform: rotate(-3deg); }
+.pip-welcome.pip-hero img { animation: pip-breathe 4s ease-in-out infinite; }
+.pip-happy.pip-hero img { animation: pip-cheer .5s ease-out both; }
+.pip-thinking .pip-halo { animation: pip-think 1.6s ease-in-out infinite; }
+.pip-calling .pip-halo { background: #e3f2e9; }
+.pip-sound { position: absolute; z-index: 2; bottom: 0; right: -2px; display: flex; align-items: center; justify-content: center; gap: 2px; width: 20px; height: 16px; border-radius: 7px; background: #e0eee6; }
+.pip-sound i { width: 2px; height: 8px; border-radius: 2px; background: #478263; animation: pip-speak .9s ease-in-out infinite alternate; }
+.pip-sound i:nth-child(2) { animation-delay: -.3s; }.pip-sound i:nth-child(3) { animation-delay: -.6s; }
+.muse-shell .muse-intro { text-align: center; }
+.muse-shell .muse-home { padding-top: 23px; }
+.muse-shell .muse-home h1 { font-size: 34px; letter-spacing: -1.4px; }
+.muse-shell .muse-subtitle { font-size: 13px; margin-top: 12px; }
+.muse-shell .muse-shortcuts { margin-top: 22px; }
+.muse-shell .muse-greeting { font-size: 12px; min-height: 18px; }
+.muse-shell .chat-header > .pip { width: 43px; height: 43px; margin-inline: -3px; }
+.muse-journey summary > .pip { width: 39px; height: 39px; }
+@keyframes pip-breathe { 0%, 100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-3px) rotate(1deg); } }
+@keyframes pip-cheer { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-7px) rotate(-3deg); } }
+@keyframes pip-think { 0%, 100% { opacity: .5; transform: scale(.95); } 50% { opacity: 1; transform: scale(1.08); } }
+@keyframes pip-speak { from { transform: scaleY(.5); } to { transform: scaleY(1.2); } }
+@media(max-height: 740px) { .pip-hero { width: 120px; height: 120px; } .muse-shell .muse-home { padding-top: 16px; } .muse-shell .muse-home h1 { font-size: 30px; } .muse-shell .muse-shortcuts { margin-top: 17px; } }
+@media(prefers-reduced-motion: reduce) { .pip img, .pip-halo, .pip-sound i { animation: none !important; } .pip-greeting { transition: none; } }
