@@ -2,7 +2,7 @@ import { ArrowUpRight, Check, ChevronRight, Headphones, Phone, ShieldCheck, Uten
 import type { Thread } from './model';
 import { chatTime } from './model';
 import { callJourney } from './call-journey';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pip, pipMood } from './Pip';
 
 const choices = [
@@ -12,15 +12,20 @@ const choices = [
   { icon: UserRound, label: 'Call someone', detail: 'A person, not just a place.' },
 ];
 
-export function MuseHome({ name, threads, onChoice, onOpen }: {
-  name: string; threads: Thread[]; onChoice: (index: number) => void; onOpen: (id: string) => void;
+export function MuseHome({ name, threads, onChoice, onOpen, engaged = false }: {
+  name: string; threads: Thread[]; onChoice: (index: number) => void; onOpen: (id: string) => void; engaged?: boolean;
 }) {
   const firstName = name.trim().split(/\s+/)[0];
   const recent = threads.slice(0, 3);
   const [greeted, setGreeted] = useState(false);
+  useEffect(() => {
+    if (!greeted) return;
+    const timer = setTimeout(() => setGreeted(false), 1600);
+    return () => clearTimeout(timer);
+  }, [greeted]);
   return <div className="muse-home">
     <div className="muse-intro">
-      <button className="pip-greeting" aria-label="Say hello to Pip" onClick={() => setGreeted(value => !value)}><Pip size="hero" mood={greeted ? 'happy' : 'welcome'}/></button>
+      <button className="pip-greeting" aria-label="Say hello to Pip" onClick={() => setGreeted(value => !value)}><Pip size="hero" mood={engaged ? 'listening' : greeted ? 'happy' : 'welcome'}/></button>
       <p className="muse-greeting" aria-live="polite">{greeted ? 'You text. I talk. We make a good team.' : firstName ? `Hi, ${firstName}. I’m Pip.` : 'Hi, I’m Pip. Your AI calling assistant.'}</p>
       <h1>Who are we<br/><span>calling today?</span></h1>
       <p className="muse-subtitle">The calls you’ve been putting off?<br/>Let’s take one off your list.</p>

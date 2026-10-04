@@ -39,4 +39,10 @@ Generation prompt set: create an original adult-friendly bluebird with a very la
 
 `server/conversation.mjs` gives the existing chat assistant Pip's warm, capable, gently witty personality. It prohibits fabricated capabilities, repeated introductions, and humor about failures, payments, or sensitive details. Existing factual, context, approval, and spending rules remain in that prompt. Telephone voice instructions are unchanged.
 
+### Sprite animation replacement
+
+The production character now uses `pip-sprite-v2.webp`, a transparent 4-by-4 atlas with 16 separately drawn eyelid, wing, head, and beak poses. It was generated with the built-in image tool from the original welcome reference, then encoded as a 1024px WebP (277 KiB). The prompt specified four rows: idle blink; wing wave; attentive listening; speaking and celebration, maintaining the exact character and cell alignment, with no text or grid lines.
+
+`src/pip-animation.ts` is the single timing source for native CSS stepped frame playback. React switches the mood rather than repainting a timer every frame. Idle blinking and waving run automatically; a nonempty composer switches home/header to listening, a pending model reply uses thinking, and an active call uses the speaking sequence. Speaking is a call-state indicator, not audio-synchronized lip movement. Reduced motion shows a stationary appropriate pose. The WebP is precached for installed PWA use. Old whole-image bobbing is no longer applied.
+
 Verified production build and 49 passing tests; rendered 320px and 390px layouts, all character images loaded, greeting interaction, customer-support entry, and expanded call plan. Screenshots: `output/pip-home-mobile.png` and `output/pip-chat-mobile.png`. Deployment uses the existing Render auto-deploy pipeline from GitHub main; verify the public home after publishing.

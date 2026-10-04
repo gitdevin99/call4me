@@ -1,5 +1,5 @@
 import { MuseHome, CallJourney } from './MuseExperience';
-import { Pip, pipMood } from './Pip';
+import { Pip, pipMood, PipAnimationStyles } from './Pip';
 import './muse.css';
 import {GoogleSignIn,googleSignInConfigured} from './GoogleSignIn';
 import {readPending,savePending,clearPending} from './pending';
@@ -823,7 +823,7 @@ export default function App() {
   const completed = data.threads.filter((t) => t.status === "completed").length;
 
   return (
-    <div className={`app-shell ${museExperience ? "muse-shell" : ""}`}>
+    <div className={`app-shell ${museExperience ? "muse-shell" : ""}`}><PipAnimationStyles/>
       <aside className="rail">
         <button
           className="brand-icon"
@@ -1059,7 +1059,7 @@ export default function App() {
                   >
                     <History size={23} />
                   </button>
-                  {museExperience ? <Pip mood={pipMood(thread, typing === thread?.id)}/> : <Avatar />}
+                  {museExperience ? <Pip mood={thread?.status === "calling" ? "calling" : typing === thread?.id ? "thinking" : draft.trim() ? "listening" : pipMood(thread)}/> : <Avatar />}
                   <div className="chat-heading">
                     <h2>{thread?.title || (museExperience ? "Pip · can you call." : "can you call.")}</h2>
                     <span>
@@ -1131,7 +1131,7 @@ export default function App() {
                 </header>
                 <div className="chat-scroll">
                   {!thread ? (
-                    museExperience ? <MuseHome name={data.name || (typeof session?.user.user_metadata?.full_name === "string" ? session.user.user_metadata.full_name : "")} threads={data.threads} onChoice={index => startChoice(index === 2 ? supportChoice : prompts[index])} onOpen={selectChat}/> : <div className="welcome">
+                    museExperience ? <MuseHome engaged={!!draft.trim()} name={data.name || (typeof session?.user.user_metadata?.full_name === "string" ? session.user.user_metadata.full_name : "")} threads={data.threads} onChoice={index => startChoice(index === 2 ? supportChoice : prompts[index])} onOpen={selectChat}/> : <div className="welcome">
                       <div className="welcome-art">
                         <span className="orbit one" />
                         <span className="orbit two" />
